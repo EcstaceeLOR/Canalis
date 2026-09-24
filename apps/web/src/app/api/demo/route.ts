@@ -1,48 +1,20 @@
 import { NextResponse } from "next/server";
-import {
-  demoDefaults,
-  demoProviderIds,
-  runDemoTask,
-  type DemoProviderId,
-} from "../../../lib/demo";
-import { jsonSafe } from "../../../lib/money";
-
-function isDemoProviderId(value: unknown): value is DemoProviderId {
-  return (
-    typeof value === "string" &&
-    demoProviderIds.includes(value as DemoProviderId)
-  );
-}
+import { apiErrorResponse, readJsonBody } from "../../../server/api";
+import { getCanalisApplication } from "../../../server/canalis";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as Record<string, unknown>;
-    const allowedProviders = Array.isArray(body.allowedProviders)
-      ? body.allowedProviders.filter(isDemoProviderId)
-      : [...demoDefaults.allowedProviders];
-
-    const result = await runDemoTask({
-      owner:
-        typeof body.owner === "string" ? body.owner : demoDefaults.owner,
-      budgetUsd:
-        typeof body.budgetUsd === "string"
-          ? body.budgetUsd
-          : demoDefaults.budgetUsd,
-      maxPerCallUsd:
-        typeof body.maxPerCallUsd === "string"
-          ? body.maxPerCallUsd
-          : demoDefaults.maxPerCallUsd,
-      allowedProviders,
-    });
-
-    return NextResponse.json(jsonSafe(result));
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Unable to run Canalis demo.",
+    const body = await readJsonBody(request);
+    const application = getCanalisApplication();
+    const created = await application.createTask(body);
+    const executed = await application.executeTask(created.task.id);
+    return NextResponse.json(executed, {
+      headers: {
+        Deprecation: "true",
+        Link: '</api/tasks>; rel="successor-version"',
       },
-      { status: 400 },
-    );
+    });
+  } catch (error) {
+    return apiErrorResponse(error);
   }
 }

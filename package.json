@@ -5,10 +5,17 @@
   "engines": {
     "node": "22.x"
   },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "examples/*"
+  ],
   "scripts": {
     "build": "pnpm -r build",
+    "build:web": "npm run build --workspace=@canalis/providers && npm run build --workspace=@canalis/solana && npm run build --workspace=@canalis/core && npm run build --workspace=@canalis/application && npm run build --workspace=@canalis/persistence && npm run build --workspace=@canalis/web",
     "test": "pnpm -r build && pnpm -r test",
     "typecheck": "pnpm -r typecheck",
+    "db:migrate": "pnpm --filter @canalis/persistence db:migrate",
     "security:check": "node scripts/check-secrets.mjs",
     "judge:check": "pnpm test && pnpm typecheck && pnpm security:check",
     "dev": "pnpm --filter @canalis/web dev"
