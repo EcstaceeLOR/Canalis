@@ -8,6 +8,9 @@ import {
 } from "../src/index.js";
 
 const channelId = Uint8Array.from({ length: 32 }, (_, index) => index + 1);
+const MAX_U64 = (1n << 64n) - 1n;
+const MIN_I64 = -(1n << 63n);
+const MAX_I64 = (1n << 63n) - 1n;
 
 describe("payment-channel voucher codec", () => {
   it("encodes the canonical 50-byte layout", () => {
@@ -40,7 +43,51 @@ describe("payment-channel voucher codec", () => {
     expect(decoded.expiresAt).toBe(0n);
   });
 
-  it("rejects malformed voucher versions and channel ids", () => {
+  it("round-trips the exact u64/i64 wire boundaries", () => {
+    for (const expiresAt of [MIN_I64, 0n, MAX_I64]) {
+      const decoded = decodeVoucher(
+        encodeVoucher({ channelId, cumulativeAmount: MAX_U64, expiresAt }),
+      );
+      expect(decoded.cumulativeAmount).toBe(MAX_U64);
+      expect(decoded.expiresAt).toBe(expiresAt);
+    }
+  });
+
+  it("rejects values outside the canonical integer widths", () => {
+    expect(() =>
+      encodeVoucher({
+        channelId,
+        cumulativeAmount: -1n,
+        expiresAt: 0n,
+      }),
+    ).toThrow(/unsigned 64-bit/);
+
+    expect(() =>
+      encodeVoucher({
+        channelId,
+        cumulativeAmount: MAX_U64 + 1n,
+        expiresAt: 0n,
+      }),
+    ).toThrow(/unsigned 64-bit/);
+
+    expect(() =>
+      encodeVoucher({
+        channelId,
+        cumulativeAmount: 1n,
+        expiresAt: MIN_I64 - 1n,
+      }),
+    ).toThrow(/signed 64-bit/);
+
+    expect(() =>
+      encodeVoucher({
+        channelId,
+        cumulativeAmount: 1n,
+        expiresAt: MAX_I64 + 1n,
+      }),
+    ).toThrow(/signed 64-bit/);
+  });
+
+  it("rejects malformed voucher versions, lengths, and channel ids", () => {
     expect(() =>
       encodeVoucher({
         channelId: new Uint8Array(31),
@@ -57,6 +104,12 @@ describe("payment-channel voucher codec", () => {
     encoded[1] = 0xff;
 
     expect(() => decodeVoucher(encoded)).toThrow(/magic\/version/);
+    expect(() => decodeVoucher(new Uint8Array(VOUCHER_LENGTH - 1))).toThrow(
+      /voucher must be/,
+    );
+    expect(() => decodeVoucher(new Uint8Array(VOUCHER_LENGTH + 1))).toThrow(
+      /voucher must be/,
+    );
   });
 
   it("enforces monotonic cumulative spend and the deposit ceiling", () => {
@@ -70,6 +123,7 @@ describe("payment-channel voucher codec", () => {
     expect(() => assertMonotonicVoucherAmount(10n, 21n, 20n)).toThrow(
       /deposit ceiling/,
     );
+    expect(() => assertMonotonicVoucherAmount(MAX_U64 - 1n, MAX_U64, MAX_U64)).not.toThrow();
   });
 
   it("treats zero expiry as no expiry", () => {

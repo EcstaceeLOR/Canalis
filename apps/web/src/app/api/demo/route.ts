@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  demoDefaults,
   demoProviderIds,
   runDemoTask,
   type DemoProviderId,
@@ -18,14 +19,19 @@ export async function POST(request: Request) {
     const body = (await request.json()) as Record<string, unknown>;
     const allowedProviders = Array.isArray(body.allowedProviders)
       ? body.allowedProviders.filter(isDemoProviderId)
-      : undefined;
+      : [...demoDefaults.allowedProviders];
 
     const result = await runDemoTask({
-      owner: typeof body.owner === "string" ? body.owner : undefined,
+      owner:
+        typeof body.owner === "string" ? body.owner : demoDefaults.owner,
       budgetUsd:
-        typeof body.budgetUsd === "string" ? body.budgetUsd : "1.00",
+        typeof body.budgetUsd === "string"
+          ? body.budgetUsd
+          : demoDefaults.budgetUsd,
       maxPerCallUsd:
-        typeof body.maxPerCallUsd === "string" ? body.maxPerCallUsd : "0.25",
+        typeof body.maxPerCallUsd === "string"
+          ? body.maxPerCallUsd
+          : demoDefaults.maxPerCallUsd,
       allowedProviders,
     });
 

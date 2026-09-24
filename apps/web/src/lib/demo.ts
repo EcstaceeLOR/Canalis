@@ -13,6 +13,14 @@ import { parseUsdc } from "./money";
 export const demoProviderIds = ["search", "data", "inference"] as const;
 export type DemoProviderId = (typeof demoProviderIds)[number];
 
+export const demoDefaults = {
+  seed: "cwf-2026-v1",
+  owner: "demo-owner",
+  budgetUsd: "1.00",
+  maxPerCallUsd: "0.25",
+  allowedProviders: ["search", "data", "inference"] as const,
+};
+
 const providers = {
   search: new DemoSearchProvider(),
   data: new DemoDataProvider(),
@@ -35,7 +43,9 @@ export type DemoTaskInput = {
 function normalizeProviders(
   requested: DemoProviderId[] | undefined,
 ): DemoProviderId[] {
-  const candidates = requested?.length ? requested : [...demoProviderIds];
+  const candidates = requested?.length
+    ? requested
+    : [...demoDefaults.allowedProviders];
   const unique = [...new Set(candidates)].filter((providerId) =>
     demoProviderIds.includes(providerId),
   );
@@ -99,7 +109,7 @@ export async function runDemoTask(
 
   const task: Task = {
     id: `canalis-demo-${nowUnixSeconds}`,
-    owner: input.owner?.trim() || "demo-owner",
+    owner: input.owner?.trim() || demoDefaults.owner,
     agentId: "canalis-research-agent",
     budget: { mint: "USDC", totalAtomic: budgetAtomic },
     policy: {
@@ -155,6 +165,10 @@ export async function runDemoTask(
   const graph = orchestrator.getPaymentGraph();
 
   return {
+    demo: {
+      mode: "deterministic" as const,
+      seed: demoDefaults.seed,
+    },
     task: {
       id: task.id,
       owner: task.owner,
