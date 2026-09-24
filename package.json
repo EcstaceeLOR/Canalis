@@ -5,7 +5,10 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r build && pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "security:check": "node scripts/check-secrets.mjs",
+    "judge:check": "pnpm test && pnpm typecheck && pnpm security:check",
+    "dev": "pnpm --filter @canalis/web dev"
   },
   "devDependencies": {
     "typescript": "^5.7.3",
