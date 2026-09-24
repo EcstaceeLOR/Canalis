@@ -8,7 +8,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo 'channel-spike: no unit tests; see @canalis/solana tests'",
     "server": "tsx src/server.ts",
-    "devnet:proof": "tsx src/devnet-proof.ts"
+    "devnet:proof": "tsx src/devnet-funded-proof.ts"
   },
   "dependencies": {
     "@solana/kit": "^6.1.0",
