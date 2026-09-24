@@ -4,6 +4,8 @@
 
 > Give an agent a budget. Canalis handles everything it pays for.
 
+### 🌐 [Live Demo](https://canalis-git-deploy-web-standalone-demola-codes.vercel.app)
+
 Canalis turns one approved task budget into policy-controlled payments across multiple machine services. It uses **Solana payment-channel semantics** to keep high-frequency authorizations offchain, records every paid action in a task-level payment graph, settles actual cumulative usage, and makes unused budget recoverable by the payer.
 
 ## The 20-second demo
@@ -161,7 +163,9 @@ Signers are injected at the wallet/runtime boundary. Canalis does not load or co
 
 ## Deployment
 
-The dashboard is deployment-ready for Vercel. Import the repository with **Root Directory = `apps/web`**; [`apps/web/vercel.json`](apps/web/vercel.json) installs the monorepo and builds the required workspace dependencies before Next.js.
+The dashboard is live on Vercel: **[canalis-git-deploy-web-standalone-demola-codes.vercel.app](https://canalis-git-deploy-web-standalone-demola-codes.vercel.app)**.
+
+Vercel uses **Root Directory = `apps/web`**. The web app is deployment-self-contained so hosting does not depend on installing the rest of the monorepo, while the canonical Canalis core, provider, and Solana packages remain in the repository for development, testing, and the live payment-channel proof.
 
 Copy environment names from [`.env.example`](.env.example). Deterministic mode requires no secret. Live x402/MPP/Solana signers must be injected outside the repository.
 
