@@ -1,5 +1,7 @@
 export type ProviderProtocol = "demo" | "x402" | "mpp";
 
+export type ProtocolPaymentMetadata = Record<string, string>;
+
 export type ProviderMetadata = {
   id: string;
   name: string;
@@ -19,6 +21,7 @@ export type ProviderQuote = {
   mint: string;
   priceAtomic: bigint;
   protocol: ProviderProtocol;
+  protocolMetadata?: ProtocolPaymentMetadata;
 };
 
 export type PaymentAuthorization = {
@@ -41,12 +44,30 @@ export type ProviderReceipt = {
   paymentReference?: string;
   responseHash: string;
   timestampUnixSeconds: bigint;
+  protocolMetadata?: ProtocolPaymentMetadata;
 };
 
 export type ProviderResult<TOutput = unknown> = {
   output: TOutput;
   receipt: ProviderReceipt;
 };
+
+export type ProviderFulfillment<TOutput = unknown> = {
+  kind: "canalis-provider-fulfillment";
+  output: TOutput;
+  protocolMetadata?: ProtocolPaymentMetadata;
+};
+
+export function providerFulfillment<TOutput>(
+  output: TOutput,
+  protocolMetadata?: ProtocolPaymentMetadata,
+): ProviderFulfillment<TOutput> {
+  return {
+    kind: "canalis-provider-fulfillment",
+    output,
+    ...(protocolMetadata ? { protocolMetadata } : {}),
+  };
+}
 
 export type PaymentAuthorizer = {
   authorize(quote: ProviderQuote): Promise<PaymentAuthorization>;
@@ -59,7 +80,7 @@ export interface ProviderAdapter<TInput = unknown, TOutput = unknown> {
     request: ProviderRequest<TInput>,
     quote: ProviderQuote,
     authorization: PaymentAuthorization,
-  ): Promise<TOutput>;
+  ): Promise<TOutput | ProviderFulfillment<TOutput>>;
 }
 
 export type ExecuteProviderOptions = {
