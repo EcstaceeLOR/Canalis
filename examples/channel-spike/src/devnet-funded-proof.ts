@@ -303,7 +303,7 @@ async function main(): Promise<void> {
     const paidFetch = wrapFetchWithPayment(fetch, client);
     const httpClient = new x402HTTPClient(client);
     const response = await paidFetch(`http://127.0.0.1:${RESOURCE_PORT}/api/tool`);
-    await httpClient.processResponse(response);
+    await httpClient.processResponse(response.clone());
     const resourceBody = await response.json();
 
     if (!response.ok) {
