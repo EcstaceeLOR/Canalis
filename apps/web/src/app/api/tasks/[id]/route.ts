@@ -8,7 +8,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const task = await getCanalisApplication().getTask(id);
+    const application = await getCanalisApplication();
+    const task = await application.getTask(id);
     return NextResponse.json(task);
   } catch (error) {
     return apiErrorResponse(error);
