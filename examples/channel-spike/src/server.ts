@@ -1,5 +1,4 @@
-import { base58 } from "@scure/base";
-import { createKeyPairSignerFromBytes } from "@solana/kit";
+import { generateKeyPairSigner } from "@solana/kit";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import type { Network } from "@x402/core/types";
 import {
@@ -27,15 +26,12 @@ function requiredEnv(name: string): string {
 }
 
 const payeeAddress = requiredEnv("SVM_PAYEE_ADDRESS");
-const receiverAuthorizerPrivateKey = requiredEnv(
-  "SVM_RECEIVER_AUTHORIZER_PRIVATE_KEY",
-);
 const facilitatorUrl = requiredEnv("FACILITATOR_URL");
 const rpcUrl = process.env.SVM_RPC_URL ?? "https://api.devnet.solana.com";
 
-const receiverAuthorizerSigner = await createKeyPairSignerFromBytes(
-  base58.decode(receiverAuthorizerPrivateKey),
-);
+// This authorizer signs vouchers only. It does not hold SOL or payment funds,
+// so the hackathon spike can safely generate an ephemeral devnet key at boot.
+const receiverAuthorizerSigner = await generateKeyPairSigner();
 
 const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
 const resourceServer = new x402ResourceServer(facilitatorClient).register(
