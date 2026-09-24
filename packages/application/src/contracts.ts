@@ -5,6 +5,15 @@ export const deterministicProviderIds = ["search", "data", "inference"] as const
 export type DeterministicProviderId = (typeof deterministicProviderIds)[number];
 export type ProviderMode = "deterministic" | "x402" | "mpp";
 
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+export type JsonObject = { [key: string]: JsonValue };
+
 const moneySchema = z
   .string()
   .trim()
@@ -136,7 +145,7 @@ export type TaskDetailDto = {
     settleTransactionSignature?: string;
     distributionTransactionSignature?: string;
     refundTransactionSignature?: string;
-    recoveryState?: Record<string, unknown>;
+    recoveryState?: JsonObject;
   }>;
   settlement: {
     status: "awaiting-onchain-finalization" | "partially-finalized" | "finalized";
