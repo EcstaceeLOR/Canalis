@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { rm, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import { promisify } from "node:util";
@@ -42,6 +43,7 @@ import express from "express";
 const execFileAsync = promisify(execFile);
 
 const NETWORK = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1" as Network;
+const DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
 const RPC_URL = process.env.SVM_RPC_URL ?? "https://api.devnet.solana.com";
 const BOOTSTRAP_RPC_URLS = (
   process.env.SVM_BOOTSTRAP_RPC_URLS ?? "https://api.devnet.solana.com"
@@ -55,9 +57,11 @@ const UNUSED_AMOUNT = MAX_AMOUNT - ACTUAL_AMOUNT;
 const INITIAL_PAYER_TOKENS = 200_000n;
 const BOOTSTRAP_LAMPORTS = 50_000;
 const POW_TARGET_LAMPORTS = 60_000_000;
+const MIN_READY_LAMPORTS = 80_000_000;
 const FACILITATOR_LAMPORTS = 20_000_000;
 const FACILITATOR_PORT = 4022;
 const RESOURCE_PORT = 4021;
+const PUBLIC_DEVNET_PAYER_SEED_LABEL = "canalis-cwf-2026-issue-1-devnet-payer";
 
 type SettleEvidence = {
   type: string;
@@ -105,6 +109,20 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function createPublicDevnetPayer(): Keypair {
+  const seed = createHash("sha256").update(PUBLIC_DEVNET_PAYER_SEED_LABEL).digest();
+  return Keypair.fromSeed(seed);
+}
+
+async function assertDevnet(connection: Connection): Promise<void> {
+  const genesisHash = await connection.getGenesisHash();
+  if (genesisHash !== DEVNET_GENESIS_HASH) {
+    throw new Error(
+      `Refusing to use the public deterministic payer outside Solana devnet. Expected ${DEVNET_GENESIS_HASH}, got ${genesisHash}`,
+    );
+  }
+}
+
 async function bootstrapTransactionFee(
   confirmationConnection: Connection,
   recipient: Keypair,
@@ -137,7 +155,7 @@ async function bootstrapTransactionFee(
   }
 
   throw new Error(
-    `Unable to obtain the tiny devnet fee bootstrap: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+    `Public devnet payer ${recipient.publicKey.toBase58()} needs test SOL. Tiny bootstrap failed: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
   );
 }
 
@@ -184,12 +202,39 @@ async function mineDevnetSolWithPow(
   }
 
   const balance = await connection.getBalance(payer.publicKey, "confirmed");
-  if (balance < FACILITATOR_LAMPORTS + 10_000_000) {
-    throw new Error(
-      `PoW funding insufficient: payer has ${balance} lamports after mining`,
-    );
+  if (balance < MIN_READY_LAMPORTS) {
+    throw new Error(`PoW funding insufficient: payer has ${balance} lamports after mining`);
   }
   return balance;
+}
+
+async function ensureDevnetSol(
+  connection: Connection,
+  payer: Keypair,
+): Promise<{
+  bootstrap: { signature: string; bootstrapRpcUrl: string };
+  balance: number;
+}> {
+  const existingBalance = await connection.getBalance(payer.publicKey, "confirmed");
+  if (existingBalance >= MIN_READY_LAMPORTS) {
+    console.log(
+      `[devnet-proof] using pre-funded public devnet payer (${existingBalance} lamports)`,
+    );
+    return {
+      bootstrap: {
+        signature: "pre-funded",
+        bootstrapRpcUrl: "pre-funded deterministic devnet payer",
+      },
+      balance: existingBalance,
+    };
+  }
+
+  console.log(
+    `[devnet-proof] public devnet payer has ${existingBalance} lamports; attempting automated bootstrap`,
+  );
+  const bootstrap = await bootstrapTransactionFee(connection, payer);
+  const balance = await mineDevnetSolWithPow(connection, payer);
+  return { bootstrap, balance };
 }
 
 function listen(app: ReturnType<typeof express>, port: number): Promise<Server> {
@@ -211,18 +256,23 @@ function getSchemePayload(paymentPayload: PaymentPayload): Record<string, unknow
 
 async function main(): Promise<void> {
   const connection = new Connection(RPC_URL, "confirmed");
-  const payer = Keypair.generate();
+  await assertDevnet(connection);
+
+  // Intentionally public, deterministic and devnet-only. Never use this identity
+  // on mainnet or with anything that has real value.
+  const payer = createPublicDevnetPayer();
   const provider = Keypair.generate();
   const facilitatorKeypair = Keypair.generate();
   const receiverAuthorizer = Keypair.generate();
 
   console.log("[devnet-proof] creating disposable identities");
-  console.log(`[devnet-proof] payer=${payer.publicKey.toBase58()}`);
+  console.log(`[devnet-proof] payer=${payer.publicKey.toBase58()} (public devnet-only identity)`);
   console.log(`[devnet-proof] provider=${provider.publicKey.toBase58()}`);
   console.log(`[devnet-proof] facilitator=${facilitatorKeypair.publicKey.toBase58()}`);
 
-  const bootstrap = await bootstrapTransactionFee(connection, payer);
-  const payerSolAfterPow = await mineDevnetSolWithPow(connection, payer);
+  const funding = await ensureDevnetSol(connection, payer);
+  const bootstrap = funding.bootstrap;
+  const payerSolAfterPow = funding.balance;
   const facilitatorFundingTransaction = await sendAndConfirmTransaction(
     connection,
     new Transaction().add(
