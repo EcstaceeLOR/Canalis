@@ -9,7 +9,13 @@ import {
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { createKeyPairSignerFromBytes } from "@solana/kit";
-import { Connection, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import {
+  Connection,
+  Keypair,
+  sendAndConfirmTransaction,
+  SystemProgram,
+  Transaction,
+} from "@solana/web3.js";
 import { x402Facilitator } from "@x402/core/facilitator";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import type {
@@ -33,10 +39,19 @@ import express from "express";
 
 const NETWORK = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1" as Network;
 const RPC_URL = process.env.SVM_RPC_URL ?? "https://api.devnet.solana.com";
+const FAUCET_RPC_URLS = (
+  process.env.SVM_FAUCET_RPC_URLS ??
+  "https://solana-devnet.drpc.org,https://api.devnet.solana.com"
+)
+  .split(",")
+  .map(value => value.trim())
+  .filter(Boolean);
 const MAX_AMOUNT = 100_000n;
 const ACTUAL_AMOUNT = 30_000n;
 const UNUSED_AMOUNT = MAX_AMOUNT - ACTUAL_AMOUNT;
 const INITIAL_PAYER_TOKENS = 200_000n;
+const BOOTSTRAP_LAMPORTS = 250_000_000;
+const FACILITATOR_LAMPORTS = 80_000_000;
 const FACILITATOR_PORT = 4022;
 const RESOURCE_PORT = 4021;
 
@@ -50,6 +65,7 @@ type SettleEvidence = {
 type ProofArtifact = {
   network: string;
   rpcUrl: string;
+  faucetRpcUrl: string;
   mint: string;
   payer: string;
   provider: string;
@@ -58,6 +74,8 @@ type ProofArtifact = {
   channelId: string;
   openTransaction: string;
   claimTransaction: string;
+  bootstrapAirdropTransaction: string;
+  facilitatorFundingTransaction: string;
   explorer: {
     channel: string;
     openTransaction: string;
@@ -81,31 +99,39 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function requestAirdropWithRetry(
-  connection: Connection,
+async function bootstrapDevnetSol(
+  confirmationConnection: Connection,
   recipient: Keypair,
-  sol: number,
-): Promise<string> {
+): Promise<{ signature: string; faucetRpcUrl: string }> {
   let lastError: unknown;
 
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
-    try {
-      const signature = await connection.requestAirdrop(
-        recipient.publicKey,
-        sol * LAMPORTS_PER_SOL,
-      );
-      await connection.confirmTransaction(signature, "confirmed");
-      return signature;
-    } catch (error) {
-      lastError = error;
-      if (attempt < 5) {
-        await sleep(attempt * 3_000);
+  for (const faucetRpcUrl of FAUCET_RPC_URLS) {
+    const faucetConnection = new Connection(faucetRpcUrl, "confirmed");
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        console.log(
+          `[devnet-proof] bootstrap airdrop ${BOOTSTRAP_LAMPORTS} lamports via ${faucetRpcUrl} (attempt ${attempt})`,
+        );
+        const signature = await faucetConnection.requestAirdrop(
+          recipient.publicKey,
+          BOOTSTRAP_LAMPORTS,
+        );
+        await confirmationConnection.confirmTransaction(signature, "confirmed");
+        return { signature, faucetRpcUrl };
+      } catch (error) {
+        lastError = error;
+        console.warn(
+          `[devnet-proof] faucet ${faucetRpcUrl} failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        if (attempt < 2) {
+          await sleep(2_000 * attempt);
+        }
       }
     }
   }
 
   throw new Error(
-    `Devnet airdrop failed after retries: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+    `All devnet bootstrap faucets failed: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
   );
 }
 
@@ -138,8 +164,19 @@ async function main(): Promise<void> {
   console.log(`[devnet-proof] provider=${provider.publicKey.toBase58()}`);
   console.log(`[devnet-proof] facilitator=${facilitatorKeypair.publicKey.toBase58()}`);
 
-  await requestAirdropWithRetry(connection, payer, 2);
-  await requestAirdropWithRetry(connection, facilitatorKeypair, 2);
+  const bootstrap = await bootstrapDevnetSol(connection, payer);
+  const facilitatorFundingTransaction = await sendAndConfirmTransaction(
+    connection,
+    new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: payer.publicKey,
+        toPubkey: facilitatorKeypair.publicKey,
+        lamports: FACILITATOR_LAMPORTS,
+      }),
+    ),
+    [payer],
+    { commitment: "confirmed" },
+  );
 
   const mint = await createMint(
     connection,
@@ -225,7 +262,7 @@ async function main(): Promise<void> {
       channelId: typeof payload.channelId === "string" ? payload.channelId : "",
       transaction:
         typeof (result as { transaction?: unknown }).transaction === "string"
-          ? ((result as { transaction: string }).transaction)
+          ? (result as { transaction: string }).transaction
           : "",
       success: result.success,
     });
@@ -338,6 +375,7 @@ async function main(): Promise<void> {
     const artifact: ProofArtifact = {
       network: NETWORK,
       rpcUrl: RPC_URL,
+      faucetRpcUrl: bootstrap.faucetRpcUrl,
       mint: mint.toBase58(),
       payer: payer.publicKey.toBase58(),
       provider: provider.publicKey.toBase58(),
@@ -346,6 +384,8 @@ async function main(): Promise<void> {
       channelId: deposit.channelId,
       openTransaction: deposit.transaction,
       claimTransaction: claim.transaction,
+      bootstrapAirdropTransaction: bootstrap.signature,
+      facilitatorFundingTransaction,
       explorer: {
         channel: `${explorerBase}/address/${deposit.channelId}?cluster=devnet`,
         openTransaction: `${explorerBase}/tx/${deposit.transaction}?cluster=devnet`,
@@ -368,6 +408,7 @@ async function main(): Promise<void> {
     await writeFile("devnet-proof.json", `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
 
     console.log("[devnet-proof] PASS");
+    console.log(`[devnet-proof] faucetRpc=${artifact.faucetRpcUrl}`);
     console.log(`[devnet-proof] mint=${artifact.mint}`);
     console.log(`[devnet-proof] channel=${artifact.channelId}`);
     console.log(`[devnet-proof] openTx=${artifact.openTransaction}`);
