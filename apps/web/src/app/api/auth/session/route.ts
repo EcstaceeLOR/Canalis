@@ -40,6 +40,7 @@ export async function POST(request: Request) {
       challengeId: body.challengeId,
       walletAddress: body.walletAddress,
       signatureBase64: body.signatureBase64,
+      domain: new URL(request.url).host,
     });
     const response = NextResponse.json({ authenticated: true, ...identity }, { status: 201 });
     response.cookies.set(CANALIS_SESSION_COOKIE, token, {
