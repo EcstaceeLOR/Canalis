@@ -1,0 +1,28 @@
+{
+  "name": "@canalis/channel-spike",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'channel-spike: no unit tests; see @canalis/solana tests'",
+    "server": "tsx src/server.ts",
+    "client": "tsx src/client.ts"
+  },
+  "dependencies": {
+    "@scure/base": "^2.0.0",
+    "@solana/kit": "^6.1.0",
+    "@x402/core": "^2.24.0",
+    "@x402/express": "^2.24.0",
+    "@x402/fetch": "^2.24.0",
+    "@x402/svm": "^2.24.0",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "tsx": "^4.20.5",
+    "typescript": "^5.7.3"
+  }
+}
