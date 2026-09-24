@@ -14,9 +14,9 @@
     "db:migrate": "tsx src/migrate.ts"
   },
   "dependencies": {
-    "@canalis/application": "file:../application",
-    "@canalis/core": "file:../core",
-    "@canalis/providers": "file:../providers",
+    "@canalis/application": "0.0.1",
+    "@canalis/core": "0.0.1",
+    "@canalis/providers": "0.0.1",
     "postgres": "^3.4.7"
   },
   "devDependencies": {

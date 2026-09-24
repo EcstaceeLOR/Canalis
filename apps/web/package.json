@@ -13,8 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@canalis/application": "file:../../packages/application",
-    "@canalis/persistence": "file:../../packages/persistence",
+    "@canalis/application": "0.0.1",
+    "@canalis/persistence": "0.0.1",
     "next": "16.3.6",
     "react": "19.3.0",
     "react-dom": "19.3.0"
