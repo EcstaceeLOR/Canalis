@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   allocateDemoReservations,
+  demoDefaults,
   runDemoTask,
 } from "./demo";
 import { formatUsdcAtomic, parseUsdc } from "./money";
@@ -59,6 +60,26 @@ describe("demo channel allocation", () => {
 });
 
 describe("runDemoTask", () => {
+  it("pins the Colosseum judge seed to the documented 1.00 / 0.25 flow", async () => {
+    const result = await runDemoTask(
+      {
+        owner: demoDefaults.owner,
+        budgetUsd: demoDefaults.budgetUsd,
+        maxPerCallUsd: demoDefaults.maxPerCallUsd,
+        allowedProviders: [...demoDefaults.allowedProviders],
+      },
+      10_000n,
+    );
+
+    expect(result.demo).toEqual({
+      mode: "deterministic",
+      seed: "cwf-2026-v1",
+    });
+    expect(result.graph.budgetAtomic).toBe(1_000_000n);
+    expect(result.graph.spentAtomic).toBe(200_000n);
+    expect(result.graph.remainingAtomic).toBe(800_000n);
+  });
+
   it("runs the three-provider Canalis vertical slice", async () => {
     const result = await runDemoTask(
       {
