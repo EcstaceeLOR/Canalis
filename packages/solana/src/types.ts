@@ -57,6 +57,11 @@ export interface PaymentChannelAdapter {
   open(request: OpenChannelRequest): Promise<ChannelDescriptor>;
   settle(request: SettleChannelRequest): Promise<SettlementResult>;
   settleAndSeal(request: SettleChannelRequest): Promise<SettlementResult>;
+  /**
+   * Cooperatively seal the channel at its current settled watermark without
+   * applying a new voucher. This maps to settle_and_seal(hasVoucher = 0).
+   */
+  sealCurrent(channelAddress: string): Promise<SettlementResult>;
   distribute(channelAddress: string): Promise<DistributionResult>;
   withdrawPayer(channelAddress: string): Promise<DistributionResult>;
   getChannel(channelAddress: string): Promise<ChannelDescriptor | null>;
