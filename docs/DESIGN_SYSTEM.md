@@ -1,33 +1,39 @@
 # Canalis design system
 
-Canalis uses one visual idea throughout the product: **many autonomous payment routes entering one governed channel**.
+Canalis is financial infrastructure for autonomous software agents: controlled, technical, transparent, and calm.
 
-## Brand mark
+## Brand mark — Flow
 
-The Canalis mark is a confluence symbol:
+The approved Canalis identity is **Flow**: two ribbon-like lanes moving through a shared direction with a distinct terminal node.
 
-- three independent routes enter from the left,
-- a central governed junction represents policy and payment orchestration,
-- one controlled flow exits to the right.
+The mark represents:
 
-It is intentionally not a lettermark and should not be redrawn as a boxed `C`.
+- autonomous value moving continuously rather than transaction-by-transaction UI chrome,
+- multiple paid operations sharing one governed financial layer,
+- a clear destination/settlement point without turning the logo into a literal architecture diagram.
 
-Assets:
+The silhouette must remain identifiable in one color. Gradient is an optional brand treatment, never the thing that makes the logo recognizable.
 
-- `apps/web/public/canalis-mark.svg` — primary gradient mark for dark/product surfaces
-- `apps/web/public/canalis-mark-mono.svg` — monochrome mark for light, print, or constrained contexts
-- `apps/web/src/app/icon.svg` — application/favicon treatment
-- `apps/web/src/components/brand/canalis-logo.tsx` — reusable mark + wordmark component with `brand`, `mono`, and `muted` tones
+### Assets
 
-Keep clear space around the mark equal to roughly one terminal-node diameter. Do not stretch, rotate, recolor individual routes, add drop shadows inside the mark, or combine it with Solana's logo.
+- `apps/web/public/canalis-mark.svg` — primary color Flow mark
+- `apps/web/public/canalis-mark-mono.svg` — monochrome Flow mark for light, print, or constrained contexts
+- `apps/web/src/app/icon.svg` — dark application/favicon treatment
+- `apps/web/src/components/brand/canalis-logo.tsx` — reusable Flow mark + `Canalis` wordmark component with `brand`, `mono`, and `muted` tones
+
+Keep clear space around the mark equal to roughly the terminal-node diameter. Do not stretch, rotate, add internal shadows, outline individual ribbons, or combine the mark with Solana's logo.
+
+### Wordmark
+
+Use `Canalis` in title case for primary product lockups. All-caps `CANALIS` may remain only in small legacy metadata until those surfaces are replaced by the multi-page product shell.
 
 ## Color system
 
 Brand colors are intentionally distinct from Solana while remaining technical and high-contrast:
 
-- `--color-brand-400: #8b7cff` — primary governed-flow indigo
+- `--color-brand-400: #8b7cff` — primary indigo
 - `--color-brand-500: #7565ff` — interaction/active indigo
-- `--color-accent-400: #43e6c8` — successful route/output accent
+- `--color-accent-400: #43e6c8` — routed-flow accent
 
 Product surfaces and text use semantic tokens such as `--color-bg-canvas`, `--color-surface-1`, `--color-text-primary`, and `--color-border-default`. New pages should use semantic tokens rather than raw hex values.
 
@@ -55,7 +61,8 @@ Avoid inventing page-local spacing/radius values unless the layout cannot be rep
 `apps/web/src/components/ui/primitives.tsx` provides the baseline product primitives:
 
 - `Button` — primary, secondary, ghost, and danger variants; small/medium/large sizing
-- `Input` — standard product field treatment
+- `Input` — standard product field treatment with disabled/error states
+- `Field` — label, hint, and validation-message wrapper
 - `Card` — static and interactive surfaces
 - `Badge` — neutral/brand/success/warning/danger states
 - `Tabs` — keyboard-focusable route/section tabs
@@ -82,7 +89,7 @@ Animations must respect `prefers-reduced-motion`.
 
 ## Light/dark usage
 
-The current application is dark-first. The primary gradient mark is optimized for dark surfaces. Use the monochrome mark or `CanalisLogo tone="mono"` on light/neutral surfaces. Do not place the gradient mark on visually noisy backgrounds.
+The current application is dark-first. The primary color mark is optimized for dark surfaces. Use the monochrome mark or `CanalisLogo tone="mono"` on light/neutral surfaces. The mark must remain legible without gradient color.
 
 ## Product voice
 
