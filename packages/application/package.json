@@ -1,5 +1,5 @@
 {
-  "name": "@canalis/core",
+  "name": "@canalis/application",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -13,9 +13,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@canalis/providers": "0.0.1"
+    "@canalis/core": "0.0.1",
+    "@canalis/providers": "0.0.1",
+    "@canalis/solana": "0.0.1",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
     "typescript": "^5.7.3",
     "vitest": "^2.1.9"
   }

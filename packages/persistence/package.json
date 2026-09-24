@@ -1,5 +1,5 @@
 {
-  "name": "@canalis/core",
+  "name": "@canalis/persistence",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -10,12 +10,18 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:migrate": "tsx src/migrate.ts"
   },
   "dependencies": {
-    "@canalis/providers": "0.0.1"
+    "@canalis/application": "0.0.1",
+    "@canalis/core": "0.0.1",
+    "@canalis/providers": "0.0.1",
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.20.5",
     "typescript": "^5.7.3",
     "vitest": "^2.1.9"
   }
