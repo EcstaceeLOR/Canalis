@@ -2,5 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "cd ../.. && npm install --no-audit --no-fund",
-  "buildCommand": "cd ../.. && if [ \"$VERCEL_ENV\" = \"production\" ]; then test -n \"$DATABASE_URL\" || (echo 'DATABASE_URL is required for production' >&2; exit 1); npm run db:migrate --workspace=@canalis/persistence; else echo 'Preview build: database migrations skipped'; fi && npm run build:web"
+  "buildCommand": "cd ../.. && npm run build:web"
 }
