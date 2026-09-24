@@ -18,6 +18,13 @@ jobs:
         with:
           node-version: 22
       - run: pnpm install --no-frozen-lockfile
+      - name: Upload generated pnpm lockfile
+        if: github.ref == 'refs/heads/deploy-fix'
+        uses: actions/upload-artifact@v4
+        with:
+          name: canalis-pnpm-lock
+          path: pnpm-lock.yaml
+          if-no-files-found: error
       - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm security:check
