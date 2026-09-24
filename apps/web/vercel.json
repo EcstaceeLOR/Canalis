@@ -2,5 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "cd ../.. && npm install --no-audit --no-fund",
-  "buildCommand": "cd ../.. && if [ \"$VERCEL_ENV\" = \"production\" ]; then test -n \"$DATABASE_URL\" || (echo 'DATABASE_URL is required for production' >&2; exit 1); npm run db:migrate --workspace=@canalis/persistence; elif [ -n \"$DATABASE_URL\" ]; then npm run db:migrate --workspace=@canalis/persistence; else echo 'DATABASE_URL not configured for preview; skipping migrations'; fi && npm run build:web"
+  "buildCommand": "cd ../.. && if [ \"$VERCEL_ENV\" = \"production\" ]; then test -n \"$DATABASE_URL\" || (echo 'DATABASE_URL is required for production' >&2; exit 1); npm run db:migrate --workspace=@canalis/persistence; else echo 'Preview build: database migrations skipped'; fi && npm run build:web"
 }
