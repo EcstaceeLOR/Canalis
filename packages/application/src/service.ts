@@ -1,0 +1,407 @@
+import { randomUUID } from "node:crypto";
+import {
+  CanalisRouteOrchestrator,
+  type ChannelReservation,
+  type RouteFlow,
+  type Task,
+  type TaskPaymentGraph,
+} from "@canalis/core";
+import {
+  demoProviders,
+  type ProviderRequest,
+  type ProviderReceipt,
+} from "@canalis/providers";
+import {
+  PAYMENT_CHANNELS_PROGRAM_ADDRESS,
+  SOLANA_DEVNET_CAIP2,
+} from "@canalis/solana";
+import {
+  parseCreateTaskRequest,
+  parseUsdc,
+  type CreateTaskRequest,
+  type DeterministicProviderId,
+  type SerializedFlow,
+  type SerializedReceipt,
+  type TaskDetailDto,
+} from "./contracts.js";
+import { ApplicationError } from "./errors.js";
+import type {
+  CanalisRepository,
+  ChannelUpdate,
+  PersistedChannel,
+  PersistedTask,
+} from "./repository.js";
+
+const DEFAULT_EXPIRY_SECONDS = 15n * 60n;
+
+function allocateReservations(
+  budgetAtomic: bigint,
+  providerIds: readonly string[],
+): ChannelReservation[] {
+  const count = BigInt(providerIds.length);
+  if (budgetAtomic < count) {
+    throw new ApplicationError(
+      "VALIDATION_ERROR",
+      "Task budget is too small for the selected provider reservations.",
+      400,
+    );
+  }
+
+  const base = budgetAtomic / count;
+  let remainder = budgetAtomic % count;
+  return providerIds.map((providerId) => {
+    const extra = remainder > 0n ? 1n : 0n;
+    if (remainder > 0n) remainder -= 1n;
+    return { providerId, ceilingAtomic: base + extra };
+  });
+}
+
+function deterministicRequest(providerId: DeterministicProviderId): ProviderRequest<unknown> {
+  if (providerId === "search") {
+    return {
+      requestId: "search-1",
+      input: { query: "Solana payment-channel agent commerce" },
+    };
+  }
+  if (providerId === "data") {
+    return {
+      requestId: "data-1",
+      input: { key: "agent-service-latency" },
+    };
+  }
+  return {
+    requestId: "inference-1",
+    input: { prompt: "Synthesize the purchased evidence into a short brief" },
+  };
+}
+
+function serializeReceipt(receipt: ProviderReceipt): SerializedReceipt {
+  return {
+    providerId: receipt.providerId,
+    requestId: receipt.requestId,
+    mint: receipt.mint,
+    priceAtomic: receipt.priceAtomic.toString(),
+    protocol: receipt.protocol,
+    authorizationId: receipt.authorizationId,
+    ...(receipt.paymentReference ? { paymentReference: receipt.paymentReference } : {}),
+    responseHash: receipt.responseHash,
+    timestampUnixSeconds: receipt.timestampUnixSeconds.toString(),
+    ...(receipt.protocolMetadata ? { protocolMetadata: receipt.protocolMetadata } : {}),
+  };
+}
+
+function serializeFlow(flow: RouteFlow): SerializedFlow {
+  return {
+    id: flow.id,
+    taskId: flow.taskId,
+    providerId: flow.providerId,
+    requestId: flow.requestId,
+    status: flow.status,
+    quotedAmountAtomic: flow.quotedAmountAtomic.toString(),
+    previousCumulativeAtomic: flow.previousCumulativeAtomic.toString(),
+    nextCumulativeAtomic: flow.nextCumulativeAtomic.toString(),
+    ...(flow.rejectionCode ? { rejectionCode: flow.rejectionCode } : {}),
+    ...(flow.rejectionMessage ? { rejectionMessage: flow.rejectionMessage } : {}),
+    ...(flow.authorizationId ? { authorizationId: flow.authorizationId } : {}),
+    ...(flow.paymentReference ? { paymentReference: flow.paymentReference } : {}),
+    ...(flow.receipt ? { receipt: serializeReceipt(flow.receipt) } : {}),
+    ...(flow.errorMessage ? { errorMessage: flow.errorMessage } : {}),
+    ...(flow.settlementTransactionSignature
+      ? { settlementTransactionSignature: flow.settlementTransactionSignature }
+      : {}),
+    createdAtUnixSeconds: flow.createdAtUnixSeconds.toString(),
+  };
+}
+
+export class CanalisApplication {
+  constructor(
+    private readonly repository: CanalisRepository,
+    private readonly nowUnixSeconds: () => bigint = () =>
+      BigInt(Math.floor(Date.now() / 1000)),
+  ) {}
+
+  async createTask(input: CreateTaskRequest | unknown): Promise<TaskDetailDto> {
+    const parsed = parseCreateTaskRequest(input);
+    const budgetAtomic = parseUsdc(parsed.budgetUsd);
+    const maxPerCallAtomic = parseUsdc(parsed.maxPerCallUsd);
+
+    if (budgetAtomic <= 0n || maxPerCallAtomic <= 0n) {
+      throw new ApplicationError(
+        "VALIDATION_ERROR",
+        "Budget and per-call cap must both be greater than zero.",
+        400,
+      );
+    }
+
+    const now = this.nowUnixSeconds();
+    const reservations = allocateReservations(budgetAtomic, parsed.allowedProviders);
+    const providerCapsAtomic = Object.fromEntries(
+      reservations.map((reservation) => [
+        reservation.providerId,
+        reservation.ceilingAtomic,
+      ]),
+    );
+
+    const task: PersistedTask = {
+      id: `task_${randomUUID()}`,
+      owner: parsed.owner,
+      agentId: parsed.agentId,
+      budget: { mint: "USDC", totalAtomic: budgetAtomic },
+      policy: {
+        allowedProviderIds: parsed.allowedProviders,
+        maxPerCallAtomic,
+        providerCapsAtomic,
+      },
+      status: "active",
+      createdAtUnixSeconds: now,
+      expiresAtUnixSeconds: now + DEFAULT_EXPIRY_SECONDS,
+      mode: parsed.mode,
+      updatedAtUnixSeconds: now,
+    };
+
+    const channels: PersistedChannel[] = reservations.map((reservation) => ({
+      taskId: task.id,
+      providerId: reservation.providerId,
+      programAddress: PAYMENT_CHANNELS_PROGRAM_ADDRESS,
+      network: SOLANA_DEVNET_CAIP2,
+      ceilingAtomic: reservation.ceilingAtomic,
+      cumulativeAuthorizedAtomic: 0n,
+      spentAtomic: 0n,
+      status: "reserved",
+      createdAtUnixSeconds: now,
+      updatedAtUnixSeconds: now,
+    }));
+
+    await this.repository.createTask(task, channels);
+    return this.getTask(task.id);
+  }
+
+  async executeTask(taskId: string): Promise<TaskDetailDto> {
+    const task = await this.requireTask(taskId);
+    if (task.mode !== "deterministic") {
+      throw new ApplicationError(
+        "PROVIDER_MODE_UNSUPPORTED",
+        `Task mode ${task.mode} is not executable by the deterministic runner.`,
+        409,
+      );
+    }
+    if (task.status !== "active") {
+      throw new ApplicationError(
+        "TASK_ALREADY_EXECUTED",
+        "This task has already completed or is no longer active.",
+        409,
+      );
+    }
+
+    const existingFlows = await this.repository.getFlows(task.id);
+    if (existingFlows.length > 0) {
+      throw new ApplicationError(
+        "TASK_ALREADY_EXECUTED",
+        "This task already has an execution history.",
+        409,
+      );
+    }
+
+    const channels = await this.repository.getChannels(task.id);
+    const reservations: ChannelReservation[] = channels.map((channel) => ({
+      providerId: channel.providerId,
+      ceilingAtomic: channel.ceilingAtomic,
+    }));
+
+    const orchestrator = new CanalisRouteOrchestrator(
+      task,
+      demoProviders,
+      reservations,
+      this.nowUnixSeconds,
+    );
+
+    let executionFailure: unknown;
+    for (const providerId of task.policy.allowedProviderIds) {
+      try {
+        await orchestrator.execute(
+          providerId,
+          deterministicRequest(providerId as DeterministicProviderId),
+        );
+      } catch (error) {
+        executionFailure = error;
+        break;
+      }
+    }
+
+    const graph = orchestrator.getPaymentGraph();
+    const now = this.nowUnixSeconds();
+    await this.repository.saveExecution(
+      task.id,
+      graph,
+      executionFailure ? "active" : "completed",
+      now,
+    );
+
+    if (executionFailure) {
+      throw new ApplicationError(
+        "PROVIDER_EXECUTION_FAILED",
+        executionFailure instanceof Error
+          ? executionFailure.message
+          : "Provider execution failed.",
+        502,
+      );
+    }
+
+    return this.getTask(task.id);
+  }
+
+  async getTask(taskId: string): Promise<TaskDetailDto> {
+    const task = await this.requireTask(taskId);
+    const [channels, flows, settlements] = await Promise.all([
+      this.repository.getChannels(taskId),
+      this.repository.getFlows(taskId),
+      this.repository.getSettlements(taskId),
+    ]);
+
+    const spentAtomic = channels.reduce((sum, channel) => sum + channel.spentAtomic, 0n);
+    const reservedCeilingAtomic = channels.reduce(
+      (sum, channel) => sum + channel.ceilingAtomic,
+      0n,
+    );
+    const terminalChannels = channels.filter((channel) =>
+      ["distributed", "recovered"].includes(channel.status),
+    ).length;
+    const settlementStatus =
+      channels.length > 0 && terminalChannels === channels.length
+        ? "finalized"
+        : terminalChannels > 0 || settlements.length > 0
+          ? "partially-finalized"
+          : "awaiting-onchain-finalization";
+
+    const graph: TaskPaymentGraph = {
+      taskId,
+      mint: task.budget.mint,
+      budgetAtomic: task.budget.totalAtomic,
+      spentAtomic,
+      remainingAtomic: task.budget.totalAtomic - spentAtomic,
+      reservedCeilingAtomic,
+      providers: channels.map((channel) => ({
+        providerId: channel.providerId,
+        channelCeilingAtomic: channel.ceilingAtomic,
+        cumulativeAuthorizedAtomic: channel.cumulativeAuthorizedAtomic,
+        spentAtomic: channel.spentAtomic,
+      })),
+      flows,
+      settlements,
+    };
+
+    return {
+      task: {
+        id: task.id,
+        owner: task.owner,
+        agentId: task.agentId,
+        mode: task.mode,
+        status: task.status,
+        mint: task.budget.mint,
+        budgetAtomic: task.budget.totalAtomic.toString(),
+        allowedProviders: task.policy.allowedProviderIds,
+        ...(task.policy.maxPerCallAtomic !== undefined
+          ? { maxPerCallAtomic: task.policy.maxPerCallAtomic.toString() }
+          : {}),
+        createdAtUnixSeconds: task.createdAtUnixSeconds.toString(),
+        expiresAtUnixSeconds: task.expiresAtUnixSeconds.toString(),
+      },
+      graph: {
+        taskId: graph.taskId,
+        mint: graph.mint,
+        budgetAtomic: graph.budgetAtomic.toString(),
+        spentAtomic: graph.spentAtomic.toString(),
+        remainingAtomic: graph.remainingAtomic.toString(),
+        reservedCeilingAtomic: graph.reservedCeilingAtomic.toString(),
+        providers: graph.providers.map((provider) => ({
+          providerId: provider.providerId,
+          channelCeilingAtomic: provider.channelCeilingAtomic.toString(),
+          cumulativeAuthorizedAtomic: provider.cumulativeAuthorizedAtomic.toString(),
+          spentAtomic: provider.spentAtomic.toString(),
+        })),
+        flows: graph.flows.map(serializeFlow),
+        settlements: graph.settlements.map((settlement) => ({
+          providerId: settlement.providerId,
+          cumulativeAmountAtomic: settlement.cumulativeAmountAtomic.toString(),
+          transactionSignature: settlement.transactionSignature,
+        })),
+      },
+      channels: channels.map((channel) => ({
+        providerId: channel.providerId,
+        programAddress: channel.programAddress,
+        network: channel.network,
+        ...(channel.channelAddress ? { channelAddress: channel.channelAddress } : {}),
+        status: channel.status,
+        ceilingAtomic: channel.ceilingAtomic.toString(),
+        cumulativeAuthorizedAtomic: channel.cumulativeAuthorizedAtomic.toString(),
+        spentAtomic: channel.spentAtomic.toString(),
+        ...(channel.openTransactionSignature
+          ? { openTransactionSignature: channel.openTransactionSignature }
+          : {}),
+        ...(channel.settleTransactionSignature
+          ? { settleTransactionSignature: channel.settleTransactionSignature }
+          : {}),
+        ...(channel.distributionTransactionSignature
+          ? { distributionTransactionSignature: channel.distributionTransactionSignature }
+          : {}),
+        ...(channel.refundTransactionSignature
+          ? { refundTransactionSignature: channel.refundTransactionSignature }
+          : {}),
+        ...(channel.recoveryState ? { recoveryState: channel.recoveryState } : {}),
+      })),
+      settlement: {
+        status: settlementStatus,
+        authorizedSpendAtomic: graph.spentAtomic.toString(),
+        recoverableAtomic: graph.remainingAtomic.toString(),
+        transactions: settlements.map((settlement) => ({
+          providerId: settlement.providerId,
+          transactionSignature: settlement.transactionSignature,
+        })),
+      },
+    };
+  }
+
+  async listTasks(limit = 50) {
+    const tasks = await this.repository.listTasks(Math.max(1, Math.min(limit, 100)));
+    return Promise.all(tasks.map((task) => this.getTask(task.id)));
+  }
+
+  async recordChannelState(
+    taskId: string,
+    providerId: string,
+    update: ChannelUpdate,
+  ): Promise<TaskDetailDto> {
+    await this.requireTask(taskId);
+    const channels = await this.repository.getChannels(taskId);
+    if (!channels.some((channel) => channel.providerId === providerId)) {
+      throw new ApplicationError(
+        "CHANNEL_NOT_FOUND",
+        `No channel reservation exists for provider ${providerId}.`,
+        404,
+      );
+    }
+    await this.repository.updateChannel(
+      taskId,
+      providerId,
+      update,
+      this.nowUnixSeconds(),
+    );
+    return this.getTask(taskId);
+  }
+
+  async listProviders() {
+    return this.repository.listProviders();
+  }
+
+  private async requireTask(taskId: string): Promise<PersistedTask> {
+    const normalized = taskId.trim();
+    if (!normalized) {
+      throw new ApplicationError("VALIDATION_ERROR", "Task id is required.", 400);
+    }
+    const task = await this.repository.getTask(normalized);
+    if (!task) {
+      throw new ApplicationError("TASK_NOT_FOUND", "Task not found.", 404);
+    }
+    return task;
+  }
+}
