@@ -185,12 +185,14 @@ export class WalletAuthService {
     challengeId: unknown;
     walletAddress: unknown;
     signatureBase64: unknown;
+    domain?: unknown;
   }): Promise<{ token: string; identity: WalletSessionIdentity }> {
     const challengeId = typeof input.challengeId === "string" ? input.challengeId.trim() : "";
     const walletAddress = normalizeWalletAddress(input.walletAddress);
     const signatureBase64 = typeof input.signatureBase64 === "string" ? input.signatureBase64.trim() : "";
-    if (!challengeId || !signatureBase64) {
-      throw new ApplicationError("VALIDATION_ERROR", "Challenge and wallet signature are required.", 400);
+    const domain = typeof input.domain === "string" ? normalizeDomain(input.domain) : "";
+    if (!challengeId || !signatureBase64 || !domain) {
+      throw new ApplicationError("VALIDATION_ERROR", "Challenge, domain, and wallet signature are required.", 400);
     }
 
     const challenge = await this.repository.getChallenge(challengeId);
@@ -206,6 +208,9 @@ export class WalletAuthService {
     }
     if (challenge.walletAddress !== walletAddress) {
       throw new ApplicationError("AUTH_WALLET_MISMATCH", "The signed wallet does not match the challenge.", 401);
+    }
+    if (challenge.domain !== domain) {
+      throw new ApplicationError("AUTH_SIGNATURE_INVALID", "Authentication challenge belongs to a different Canalis host.", 401);
     }
 
     const valid = await this.verifySignature(challenge.message, walletAddress, signatureBase64);
