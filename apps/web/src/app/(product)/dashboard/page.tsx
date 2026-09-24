@@ -1,0 +1,20 @@
+import Link from "next/link";
+import { MetricCard, PageHeader, SectionHeader } from "../../../components/product/page-header";
+import { devnetProof, explorerAddress, explorerTx, referenceProviders, shortAddress } from "../../../lib/product-reference";
+
+export const metadata = { title: "Dashboard" };
+
+export default function DashboardPage() {
+  return <div className="page-stack">
+    <PageHeader eyebrow="Control plane" title="Good to see you." description="A truthful operational view of Canalis today: deterministic task execution plus verified Solana devnet settlement evidence." actions={<Link className="primary-action" href="/tasks/demo">Run reference task <span>→</span></Link>} />
+    <section className="metric-row"><MetricCard label="Live user tasks" value="0" detail="Persistence arrives with the Tasks workspace" /><MetricCard label="Reference spend" value="$0.20" detail="Search + Data + Inference" tone="brand" /><MetricCard label="Reference recoverable" value="$0.80" detail="Unused task capacity" tone="positive" /><MetricCard label="Verified channels" value="1" detail="Solana devnet proof" tone="positive" /></section>
+    <div className="dashboard-grid">
+      <section className="product-card dashboard-primary"><SectionHeader title="Reference payment channel" detail="Canonical Solana payment-channels proof" action={<a className="text-link" href={explorerAddress(devnetProof.channel)} target="_blank" rel="noreferrer">Explorer ↗</a>} /><div className="channel-hero"><div className="channel-ring"><span>30%</span></div><div><span className="status-chip success">Settled</span><h3>{shortAddress(devnetProof.channel, 10, 8)}</h3><p>100,000 ceiling · 30,000 provider settlement · 70,000 returned</p></div></div><div className="channel-ledger"><div><span>Ceiling</span><strong>100,000</strong></div><i>→</i><div><span>Settled</span><strong>30,000</strong></div><i>+</i><div><span>Recovered</span><strong>70,000</strong></div></div></section>
+      <section className="product-card"><SectionHeader title="Provider surface" detail="Current deterministic adapters" /><div className="provider-health-list">{referenceProviders.map((provider) => <div key={provider.id}><span className="provider-avatar">{provider.name.charAt(8) || provider.name.charAt(0)}</span><div><strong>{provider.name}</strong><small>{provider.role}</small></div><b>{provider.price}</b><i className="health-dot" /></div>)}</div><Link className="card-footer-link" href="/providers">Open provider registry <span>→</span></Link></section>
+    </div>
+    <div className="dashboard-grid lower">
+      <section className="product-card"><SectionHeader title="Execution paths" detail="Start from what Canalis can prove today" /><div className="action-list"><Link href="/tasks/demo"><span className="action-icon">▶</span><div><strong>Run deterministic task</strong><small>Exercise policy, routing, receipts, and recovery accounting.</small></div><b>→</b></Link><Link href="/channels"><span className="action-icon">◎</span><div><strong>Inspect devnet channel</strong><small>Review the real channel, ceiling, settlement, and recovery proof.</small></div><b>→</b></Link><a href={explorerTx(devnetProof.settleSignature)} target="_blank" rel="noreferrer"><span className="action-icon">↗</span><div><strong>Open settlement transaction</strong><small>Verify the real Solana devnet transaction in Explorer.</small></div><b>↗</b></a></div></section>
+      <section className="product-card"><SectionHeader title="Product state" detail="Capability boundaries are explicit" /><div className="capability-list"><div><span className="capability-check">✓</span><p><strong>Policy orchestration</strong><small>Deterministic reference path is interactive.</small></p></div><div><span className="capability-check">✓</span><p><strong>Payment-channel primitive</strong><small>Proven end-to-end on devnet.</small></p></div><div><span className="capability-pending">○</span><p><strong>Persistent account workspace</strong><small>No user records are fabricated before persistence lands.</small></p></div></div></section>
+    </div>
+  </div>;
+}
