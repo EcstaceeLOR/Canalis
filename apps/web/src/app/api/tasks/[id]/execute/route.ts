@@ -8,7 +8,8 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const task = await getCanalisApplication().executeTask(id);
+    const application = await getCanalisApplication();
+    const task = await application.executeTask(id);
     return NextResponse.json(task);
   } catch (error) {
     return apiErrorResponse(error);
