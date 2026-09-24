@@ -97,6 +97,21 @@ function createPublicDevnetPayer(): Keypair {
   return Keypair.fromSeed(seed);
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isTransientRpcRateLimit(result: SettleResponse): boolean {
+  const transaction = (result as { transaction?: unknown }).transaction;
+  const errorMessage = (result as { errorMessage?: unknown }).errorMessage;
+  return (
+    result.success === false &&
+    (transaction === "" || transaction === undefined) &&
+    typeof errorMessage === "string" &&
+    errorMessage.includes("429")
+  );
+}
+
 async function assertDevnet(connection: Connection): Promise<void> {
   const genesisHash = await connection.getGenesisHash();
   if (genesisHash !== DEVNET_GENESIS_HASH) {
@@ -245,14 +260,28 @@ async function main(): Promise<void> {
   });
   facilitatorApp.post("/settle", async (req, res) => {
     const paymentPayload = req.body.paymentPayload as PaymentPayload;
-    const result: SettleResponse = await facilitator.settle(
-      paymentPayload,
-      req.body.paymentRequirements as PaymentRequirements,
-    );
-    console.log(`[devnet-proof] settle=${JSON.stringify(result)}`);
+    const requirements = req.body.paymentRequirements as PaymentRequirements;
     const payload = getSchemePayload(paymentPayload);
+    const settlementType = typeof payload.type === "string" ? payload.type : "unknown";
+
+    // The public devnet RPC occasionally rate-limits the immediate claim that follows a
+    // successful deposit. A failed result with no transaction means nothing was broadcast,
+    // so bounded retry is safe. Never retry a result that carries a transaction signature.
+    if (settlementType === "claim") {
+      await sleep(1_500);
+    }
+
+    let result: SettleResponse = await facilitator.settle(paymentPayload, requirements);
+    for (let retry = 1; retry <= 3 && isTransientRpcRateLimit(result); retry += 1) {
+      const delayMs = retry * 2_000;
+      console.warn(`[devnet-proof] claim RPC 429 with no broadcast; retry ${retry}/3 in ${delayMs}ms`);
+      await sleep(delayMs);
+      result = await facilitator.settle(paymentPayload, requirements);
+    }
+
+    console.log(`[devnet-proof] settle=${JSON.stringify(result)}`);
     settleEvidence.push({
-      type: typeof payload.type === "string" ? payload.type : "unknown",
+      type: settlementType,
       channelId: typeof payload.channelId === "string" ? payload.channelId : "",
       transaction:
         typeof (result as { transaction?: unknown }).transaction === "string"
