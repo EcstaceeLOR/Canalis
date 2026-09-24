@@ -4,9 +4,11 @@ import type {
   PaymentAuthorization,
   PaymentAuthorizer,
   ProviderAdapter,
+  ProviderFulfillment,
   ProviderQuote,
   ProviderRequest,
   ProviderResult,
+  ProtocolPaymentMetadata,
 } from "./types.js";
 
 function assertQuoteMatchesRequest(
@@ -62,6 +64,28 @@ function stableJson(value: unknown): string {
     .join(",")}}`;
 }
 
+function isProviderFulfillment<TOutput>(
+  value: TOutput | ProviderFulfillment<TOutput>,
+): value is ProviderFulfillment<TOutput> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "kind" in value &&
+    (value as { kind?: unknown }).kind === "canalis-provider-fulfillment"
+  );
+}
+
+function mergeProtocolMetadata(
+  quoteMetadata?: ProtocolPaymentMetadata,
+  fulfillmentMetadata?: ProtocolPaymentMetadata,
+): ProtocolPaymentMetadata | undefined {
+  if (!quoteMetadata && !fulfillmentMetadata) return undefined;
+  return {
+    ...(quoteMetadata ?? {}),
+    ...(fulfillmentMetadata ?? {}),
+  };
+}
+
 export function hashProviderResponse(output: unknown): string {
   return createHash("sha256").update(stableJson(output)).digest("hex");
 }
@@ -76,11 +100,20 @@ export async function executeProviderRequest<TInput, TOutput>(
   assertQuoteMatchesRequest(provider.metadata.id, request.requestId, quote);
 
   // This await is deliberately before fulfillment. A denied or malformed
-  // authorization means paid work is never returned.
+  // authorization means the paid protocol request is never attempted.
   const authorization = await authorizer.authorize(quote);
   assertAuthorizationMatchesQuote(quote, authorization);
 
-  const output = await provider.fulfillAuthorized(request, quote, authorization);
+  const fulfillment = await provider.fulfillAuthorized(request, quote, authorization);
+  const output = isProviderFulfillment(fulfillment)
+    ? fulfillment.output
+    : fulfillment;
+  const protocolMetadata = mergeProtocolMetadata(
+    quote.protocolMetadata,
+    isProviderFulfillment(fulfillment)
+      ? fulfillment.protocolMetadata
+      : undefined,
+  );
   const nowUnixSeconds =
     options.nowUnixSeconds ?? (() => BigInt(Math.floor(Date.now() / 1000)));
 
@@ -96,6 +129,7 @@ export async function executeProviderRequest<TInput, TOutput>(
       paymentReference: authorization.paymentReference,
       responseHash: hashProviderResponse(output),
       timestampUnixSeconds: nowUnixSeconds(),
+      ...(protocolMetadata ? { protocolMetadata } : {}),
     },
   };
 }

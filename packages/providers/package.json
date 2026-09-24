@@ -12,6 +12,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@x402/fetch": "^2.27.0"
+  },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "typescript": "^5.7.3",
