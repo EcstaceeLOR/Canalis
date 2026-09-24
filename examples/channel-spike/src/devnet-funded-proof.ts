@@ -205,7 +205,13 @@ async function main(): Promise<void> {
   const authorizerSigner = await createKeyPairSignerFromBytes(receiverAuthorizer.secretKey);
 
   const settleEvidence: SettleEvidence[] = [];
-  const facilitator = new x402Facilitator();
+  const facilitator = new x402Facilitator()
+    .onVerifyFailure(async context => {
+      console.error(`[devnet-proof] facilitator verify failure: ${context.error.message}`);
+    })
+    .onSettleFailure(async context => {
+      console.error(`[devnet-proof] facilitator settle failure: ${context.error.message}`);
+    });
   facilitator.register(
     NETWORK,
     new UptoSvmFacilitatorScheme(
@@ -221,6 +227,7 @@ async function main(): Promise<void> {
       req.body.paymentPayload as PaymentPayload,
       req.body.paymentRequirements as PaymentRequirements,
     );
+    console.log(`[devnet-proof] verify=${JSON.stringify(result)}`);
     res.json(result);
   });
   facilitatorApp.post("/settle", async (req, res) => {
@@ -229,6 +236,7 @@ async function main(): Promise<void> {
       paymentPayload,
       req.body.paymentRequirements as PaymentRequirements,
     );
+    console.log(`[devnet-proof] settle=${JSON.stringify(result)}`);
     const payload = getSchemePayload(paymentPayload);
     settleEvidence.push({
       type: typeof payload.type === "string" ? payload.type : "unknown",
@@ -242,7 +250,9 @@ async function main(): Promise<void> {
     res.json(result);
   });
   facilitatorApp.get("/supported", (_req, res) => {
-    res.json(facilitator.getSupported());
+    const supported = facilitator.getSupported();
+    console.log(`[devnet-proof] supported=${JSON.stringify(supported)}`);
+    res.json(supported);
   });
 
   const facilitatorServer = await listen(facilitatorApp, FACILITATOR_PORT);
@@ -282,7 +292,11 @@ async function main(): Promise<void> {
   );
   resourceApp.get("/api/tool", (_req, res) => {
     setSettlementOverrides(res, { amount: ACTUAL_AMOUNT.toString() });
-    res.json({ ok: true, authorizedMaximum: MAX_AMOUNT.toString(), actualCharge: ACTUAL_AMOUNT.toString() });
+    res.json({
+      ok: true,
+      authorizedMaximum: MAX_AMOUNT.toString(),
+      actualCharge: ACTUAL_AMOUNT.toString(),
+    });
   });
 
   const resourceHttpServer = await listen(resourceApp, RESOURCE_PORT);
@@ -303,10 +317,12 @@ async function main(): Promise<void> {
     const paidFetch = wrapFetchWithPayment(fetch, client);
     const httpClient = new x402HTTPClient(client);
     const response = await paidFetch(`http://127.0.0.1:${RESOURCE_PORT}/api/tool`);
-    await httpClient.processResponse(response.clone());
+    const processedResponse = await httpClient.processResponse(response.clone());
     const resourceBody = await response.json();
 
     if (!response.ok) {
+      console.error(`[devnet-proof] paymentResult=${JSON.stringify(processedResponse)}`);
+      console.error(`[devnet-proof] settleEvidence=${JSON.stringify(settleEvidence)}`);
       throw new Error(`Paid request failed: HTTP ${response.status} ${JSON.stringify(resourceBody)}`);
     }
 
