@@ -1,0 +1,35 @@
+name: commit-lockfile
+
+on:
+  push:
+    branches: [deploy-fix]
+
+permissions:
+  contents: write
+
+jobs:
+  commit-lockfile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: deploy-fix
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --no-frozen-lockfile
+      - name: Commit lockfile
+        run: |
+          if git status --porcelain pnpm-lock.yaml | grep -q .; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add pnpm-lock.yaml
+            git commit -m "fix: commit pnpm lockfile for Vercel [skip ci]"
+            git push origin HEAD:deploy-fix
+          else
+            echo "pnpm-lock.yaml is already committed and current"
+          fi
