@@ -105,6 +105,8 @@ The payer must hold the devnet test asset required by the selected facilitator/r
 
 ## Verification status
 
+A single repository workflow at `.github/workflows/ci.yml` runs tests and typechecks for pushes and pull requests.
+
 ### Proven in source/tests
 
 - [x] canonical voucher size and byte layout
