@@ -4,6 +4,7 @@ on:
   push:
     branches: [main, issue-1-channel-spike, issue-1-devnet-proof]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   verify:
@@ -22,7 +23,7 @@ jobs:
       - run: pnpm security:check
 
   devnet-proof:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/issue-1-devnet-proof'
+    if: github.event_name == 'workflow_dispatch'
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 12
