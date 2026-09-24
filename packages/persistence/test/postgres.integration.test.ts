@@ -1,0 +1,68 @@
+import { beforeAll, describe, expect, it } from "vitest";
+import { CanalisApplication } from "@canalis/application";
+import postgres from "postgres";
+import { migrateDatabase, PostgresCanalisRepository } from "../src/index.js";
+
+const databaseUrl = process.env.DATABASE_URL;
+const dbDescribe = databaseUrl ? describe : describe.skip;
+
+dbDescribe("Postgres persistence integration", () => {
+  beforeAll(async () => {
+    await migrateDatabase(databaseUrl!);
+    const sql = postgres(databaseUrl!, { max: 1, prepare: false });
+    await sql.unsafe(
+      "TRUNCATE settlements, receipts, flows, channels, policies, tasks RESTART IDENTITY CASCADE",
+    );
+    await sql.end({ timeout: 5 });
+  });
+
+  it("survives a repository restart with task, receipts, channels and recovery state", async () => {
+    const repositoryOne = new PostgresCanalisRepository(databaseUrl!);
+    const appOne = new CanalisApplication(repositoryOne, () => 1_800_000_000n);
+    const created = await appOne.createTask({
+      owner: "integration-owner",
+      budgetUsd: "1.00",
+      maxPerCallUsd: "0.25",
+      allowedProviders: ["search", "data", "inference"],
+      mode: "deterministic",
+    });
+    const executed = await appOne.executeTask(created.task.id);
+    expect(executed.graph.spentAtomic).toBe("200000");
+    expect(executed.graph.remainingAtomic).toBe("800000");
+    expect(executed.graph.flows.filter((flow) => flow.receipt).length).toBe(3);
+    await repositoryOne.close();
+
+    const repositoryTwo = new PostgresCanalisRepository(databaseUrl!);
+    const appTwo = new CanalisApplication(repositoryTwo, () => 1_800_000_100n);
+    const restored = await appTwo.getTask(created.task.id);
+    expect(restored.task.status).toBe("completed");
+    expect(restored.graph.flows).toHaveLength(3);
+    expect(restored.channels).toHaveLength(3);
+
+    await appTwo.recordChannelState(created.task.id, "search", {
+      channelAddress: "integration-channel-address",
+      status: "recovered",
+      openTransactionSignature: "integration-open-signature",
+      settleTransactionSignature: "integration-settle-signature",
+      refundTransactionSignature: "integration-refund-signature",
+      recoveryState: { action: "payer-refund", complete: true },
+    });
+    await repositoryTwo.close();
+
+    const repositoryThree = new PostgresCanalisRepository(databaseUrl!);
+    const appThree = new CanalisApplication(repositoryThree);
+    const afterSecondRestart = await appThree.getTask(created.task.id);
+    const searchChannel = afterSecondRestart.channels.find(
+      (channel) => channel.providerId === "search",
+    );
+    expect(searchChannel?.channelAddress).toBe("integration-channel-address");
+    expect(searchChannel?.refundTransactionSignature).toBe(
+      "integration-refund-signature",
+    );
+    expect(searchChannel?.recoveryState).toEqual({
+      action: "payer-refund",
+      complete: true,
+    });
+    await repositoryThree.close();
+  });
+});
