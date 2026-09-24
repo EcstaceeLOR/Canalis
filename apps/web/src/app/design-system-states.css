@@ -1,0 +1,35 @@
+.ui-input:disabled {
+  cursor: not-allowed;
+  color: var(--color-text-tertiary);
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-subtle);
+  opacity: 0.62;
+}
+
+.ui-input[aria-invalid="true"] {
+  border-color: rgba(255, 113, 133, 0.72);
+  box-shadow: 0 0 0 3px rgba(255, 113, 133, 0.1);
+}
+
+.ui-field-error {
+  margin-top: var(--space-2);
+  color: #ffabb7;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.ui-button[aria-busy="true"] {
+  cursor: progress;
+  opacity: 0.72;
+}
+
+.ui-tab:disabled,
+.ui-nav-item[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.ui-card[data-error="true"] {
+  border-color: rgba(255, 113, 133, 0.3);
+}
