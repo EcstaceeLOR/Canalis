@@ -1,0 +1,1 @@
+export default function ProductLoading() { return <div className="page-stack loading-page" aria-busy="true"><div className="loading-line short" /><div className="loading-line title" /><div className="loading-line medium" /><div className="loading-card-grid"><div /><div /><div /><div /></div><div className="loading-panel" /></div>; }
