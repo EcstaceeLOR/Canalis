@@ -116,10 +116,10 @@ A single repository workflow at `.github/workflows/ci.yml` runs tests and typech
 - [x] deposit-ceiling guard
 - [x] typed Canalis channel boundary
 - [x] official x402 SVM `upto` server/client integration wired
+- [x] CI tests and TypeScript typecheck pass on PR #9
 
 ### Still required before closing Issue #1
 
-- [ ] CI typecheck/test passes on the draft PR
 - [ ] perform one funded **devnet-only** request through a compatible facilitator
 - [ ] capture channel/settlement transaction signatures
 - [ ] verify provider receives the actual amount, not the ceiling
