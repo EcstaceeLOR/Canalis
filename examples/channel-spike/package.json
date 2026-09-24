@@ -7,10 +7,13 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo 'channel-spike: no unit tests; see @canalis/solana tests'",
-    "server": "tsx src/server.ts"
+    "server": "tsx src/server.ts",
+    "devnet:proof": "tsx src/devnet-funded-proof.ts"
   },
   "dependencies": {
     "@solana/kit": "^6.1.0",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
     "@x402/core": "^2.24.0",
     "@x402/express": "^2.24.0",
     "@x402/fetch": "^2.24.0",

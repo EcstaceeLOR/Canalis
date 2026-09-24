@@ -2,8 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [main, issue-1-channel-spike]
+    branches: [main, issue-1-channel-spike, issue-1-devnet-proof]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   verify:
@@ -20,3 +21,29 @@ jobs:
       - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm security:check
+
+  devnet-proof:
+    if: github.event_name == 'workflow_dispatch'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --no-frozen-lockfile
+      - name: Prove Solana payment-channel lifecycle on devnet
+        run: pnpm --filter @canalis/channel-spike devnet:proof
+        env:
+          SVM_RPC_URL: https://api.devnet.solana.com
+      - name: Upload devnet proof artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canalis-devnet-payment-channel-proof
+          path: examples/channel-spike/devnet-proof.json
+          if-no-files-found: error
