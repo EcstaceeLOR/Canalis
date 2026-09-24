@@ -12,7 +12,10 @@ export type JsonValue =
   | null
   | JsonValue[]
   | { [key: string]: JsonValue };
-export type JsonObject = { [key: string]: JsonValue };
+// JSONB decoding is runtime-validated by Postgres. Keep the object boundary
+// permissive enough for database-driver output while retaining JsonValue for
+// callers that construct metadata in application code.
+export type JsonObject = Record<string, any>;
 
 const moneySchema = z
   .string()
