@@ -6,7 +6,14 @@ export type ApplicationErrorCode =
   | "PROVIDER_EXECUTION_FAILED"
   | "CHANNEL_NOT_FOUND"
   | "STORAGE_NOT_CONFIGURED"
-  | "STORAGE_ERROR";
+  | "STORAGE_ERROR"
+  | "AUTH_REQUIRED"
+  | "AUTH_CHALLENGE_NOT_FOUND"
+  | "AUTH_CHALLENGE_EXPIRED"
+  | "AUTH_CHALLENGE_USED"
+  | "AUTH_WALLET_MISMATCH"
+  | "AUTH_SIGNATURE_INVALID"
+  | "FORBIDDEN";
 
 export class ApplicationError extends Error {
   constructor(

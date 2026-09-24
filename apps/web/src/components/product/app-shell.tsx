@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CanalisLogo } from "../brand/canalis-logo";
+import { WalletAccountControl } from "../wallet/wallet-identity";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", glyph: "⌂" },
@@ -123,6 +124,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </button>
             <Link className="topbar-task-link" href="/tasks/demo">Run task</Link>
             <span className="network-badge"><i />DEVNET</span>
+            <WalletAccountControl />
           </div>
         </header>
         <main className="product-content">{children}</main>

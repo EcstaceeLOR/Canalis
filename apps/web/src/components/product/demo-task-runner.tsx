@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useWalletIdentity } from "../wallet/wallet-identity";
 
 type ProviderId = "search" | "data" | "inference";
 type Flow = { id: string; providerId: string; requestId: string; status: "fulfilled" | "rejected"; quotedAmountAtomic: string; nextCumulativeAtomic: string; rejectionCode?: string; rejectionMessage?: string; paymentReference?: string; receipt?: { responseHash: string } };
@@ -14,6 +15,8 @@ function compact(value?: string) { if (!value) return "—"; return value.length
 function apiMessage(payload: DemoResponse | ApiError, fallback: string) { return "error" in payload ? payload.error.message : fallback; }
 
 export function DemoTaskRunner() {
+  const { status } = useWalletIdentity();
+  const authenticated = status === "connected";
   const [budget, setBudget] = useState("1.00");
   const [cap, setCap] = useState("0.25");
   const [selected, setSelected] = useState<ProviderId[]>(["search", "data", "inference"]);
@@ -27,6 +30,10 @@ export function DemoTaskRunner() {
   }
 
   async function run() {
+    if (!authenticated) {
+      setError("Connect and sign in with a wallet before creating a task.");
+      return;
+    }
     setRunning(true); setError("");
     try {
       const createResult = await fetch("/api/tasks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ budgetUsd: budget, maxPerCallUsd: cap, allowedProviders: selected, mode: "deterministic" }) });
@@ -55,7 +62,8 @@ export function DemoTaskRunner() {
         <div className="provider-select-grid">
           {(Object.keys(providers) as ProviderId[]).map((id) => <button className={selected.includes(id) ? "selected" : ""} type="button" onClick={() => toggle(id)} key={id}><span>{providers[id].name}</span><small>{providers[id].price}</small><i>{selected.includes(id) ? "✓" : "+"}</i></button>)}
         </div>
-        <button className="primary-action wide" type="button" onClick={run} disabled={running}>{running ? "Persisting and routing payments…" : "Run reference task"}<span>→</span></button>
+        <button className="primary-action wide" type="button" onClick={run} disabled={running || !authenticated}>{running ? "Persisting and routing payments…" : authenticated ? "Run reference task" : "Connect wallet to run"}<span>→</span></button>
+        {!authenticated && !error ? <div className="inline-note">Task records are scoped to the wallet that signed into Canalis.</div> : null}
         {error ? <div className="inline-error" role="alert">{error}</div> : null}
       </section>
 
