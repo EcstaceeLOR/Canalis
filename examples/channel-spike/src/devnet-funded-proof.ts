@@ -13,6 +13,7 @@ import { createKeyPairSignerFromBytes } from "@solana/kit";
 import {
   Connection,
   Keypair,
+  PublicKey,
   sendAndConfirmTransaction,
   SystemProgram,
   Transaction,
@@ -40,6 +41,7 @@ import express from "express";
 
 const NETWORK = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1" as Network;
 const DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+const DEVNET_TREASURY_OWNER = new PublicKey("4zTeC5mVqWLruDexgU2mV66p9t5vCA9JyiZqdGDUspap");
 const RPC_URL = process.env.SVM_RPC_URL ?? "https://api.devnet.solana.com";
 const PUBLIC_DEVNET_PAYER_SEED_LABEL = "canalis-cwf-2026-issue-1-devnet-payer";
 
@@ -63,6 +65,7 @@ type ProofArtifact = {
   network: string;
   rpcUrl: string;
   mint: string;
+  treasuryTokenAccount: string;
   payer: string;
   provider: string;
   facilitator: string;
@@ -180,6 +183,16 @@ async function main(): Promise<void> {
     false,
     "confirmed",
   );
+  const treasuryTokenAccount = await getOrCreateAssociatedTokenAccount(
+    connection,
+    payer,
+    mint,
+    DEVNET_TREASURY_OWNER,
+    true,
+    "confirmed",
+  );
+
+  console.log(`[devnet-proof] treasuryAta=${treasuryTokenAccount.address.toBase58()}`);
 
   await mintTo(
     connection,
@@ -362,6 +375,7 @@ async function main(): Promise<void> {
       network: NETWORK,
       rpcUrl: RPC_URL,
       mint: mint.toBase58(),
+      treasuryTokenAccount: treasuryTokenAccount.address.toBase58(),
       payer: payer.publicKey.toBase58(),
       provider: provider.publicKey.toBase58(),
       facilitator: facilitatorKeypair.publicKey.toBase58(),
@@ -392,6 +406,7 @@ async function main(): Promise<void> {
 
     console.log("[devnet-proof] PASS");
     console.log(`[devnet-proof] mint=${artifact.mint}`);
+    console.log(`[devnet-proof] treasuryAta=${artifact.treasuryTokenAccount}`);
     console.log(`[devnet-proof] channel=${artifact.channelId}`);
     console.log(`[devnet-proof] openTx=${artifact.openTransaction}`);
     console.log(`[devnet-proof] claimTx=${artifact.claimTransaction}`);
