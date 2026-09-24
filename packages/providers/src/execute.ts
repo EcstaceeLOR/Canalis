@@ -48,7 +48,7 @@ function assertAuthorizationMatchesQuote(
 
 function stableJson(value: unknown): string {
   if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? "null";
   }
 
   if (Array.isArray(value)) {
