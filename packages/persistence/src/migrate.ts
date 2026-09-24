@@ -3,9 +3,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 
+const MIGRATION_LOCK_NAMESPACE = 43414;
+const MIGRATION_LOCK_KEY = 240001;
+
 export async function migrateDatabase(databaseUrl: string): Promise<void> {
   const sql = postgres(databaseUrl, { max: 1, prepare: false });
+  let locked = false;
   try {
+    await sql`SELECT pg_advisory_lock(${MIGRATION_LOCK_NAMESPACE}, ${MIGRATION_LOCK_KEY})`;
+    locked = true;
+
     await sql.unsafe(`
       CREATE TABLE IF NOT EXISTS canalis_schema_migrations (
         version TEXT PRIMARY KEY,
@@ -34,6 +41,9 @@ export async function migrateDatabase(databaseUrl: string): Promise<void> {
       });
     }
   } finally {
+    if (locked) {
+      await sql`SELECT pg_advisory_unlock(${MIGRATION_LOCK_NAMESPACE}, ${MIGRATION_LOCK_KEY})`;
+    }
     await sql.end({ timeout: 5 });
   }
 }
