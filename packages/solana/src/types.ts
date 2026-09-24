@@ -1,3 +1,5 @@
+import type { SignatureBytes } from "@solana/kit";
+
 export type ChannelLifecycleState =
   | "opening"
   | "open"
@@ -31,7 +33,7 @@ export type SettleChannelRequest = {
   channelAddress: string;
   cumulativeAmount: bigint;
   expiresAt: bigint;
-  voucherSignature: Uint8Array;
+  voucherSignature: SignatureBytes;
 };
 
 export type SettlementResult = {
