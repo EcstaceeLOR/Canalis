@@ -2,5 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "cd ../.. && npm install --no-audit --no-fund",
-  "buildCommand": "cd ../.. && npm run build:web"
+  "buildCommand": "cd ../.. && npm run db:migrate --workspace=@canalis/persistence && npm run build:web"
 }
