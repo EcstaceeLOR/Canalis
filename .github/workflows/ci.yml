@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main, issue-1-channel-spike, issue-1-devnet-proof]
+    branches: [main, issue-1-channel-spike, issue-1-devnet-proof, deploy-fix]
   pull_request:
   workflow_dispatch:
 
@@ -21,6 +21,8 @@ jobs:
       - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm security:check
+      - name: Reproduce Vercel web build
+        run: pnpm --filter @canalis/core build && pnpm --filter @canalis/providers build && pnpm --filter @canalis/web build
 
   devnet-proof:
     if: github.event_name == 'workflow_dispatch'
