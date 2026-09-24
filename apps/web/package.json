@@ -2,10 +2,8 @@
   "name": "@canalis/web",
   "version": "0.0.1",
   "private": true,
-  "packageManager": "pnpm@10.17.1",
   "engines": {
-    "node": "22.x",
-    "pnpm": "10.17.1"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "next dev",
@@ -15,8 +13,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@canalis/core": "workspace:*",
-    "@canalis/providers": "workspace:*",
     "next": "16.3.6",
     "react": "19.3.0",
     "react-dom": "19.3.0"
