@@ -6,7 +6,7 @@ import type {
   TaskStatus,
 } from "@canalis/core";
 import type { ProviderMetadata } from "@canalis/providers";
-import type { ProviderMode } from "./contracts.js";
+import type { JsonObject, ProviderMode } from "./contracts.js";
 
 export type PersistedTask = Task & {
   mode: ProviderMode;
@@ -16,7 +16,7 @@ export type PersistedTask = Task & {
 export type PersistedProvider = ProviderMetadata & {
   mode: ProviderMode;
   endpoint?: string;
-  config?: Record<string, unknown>;
+  config?: JsonObject;
 };
 
 export type ChannelStatus =
@@ -41,7 +41,7 @@ export type PersistedChannel = {
   settleTransactionSignature?: string;
   distributionTransactionSignature?: string;
   refundTransactionSignature?: string;
-  recoveryState?: Record<string, unknown>;
+  recoveryState?: JsonObject;
   createdAtUnixSeconds: bigint;
   updatedAtUnixSeconds: bigint;
 };
