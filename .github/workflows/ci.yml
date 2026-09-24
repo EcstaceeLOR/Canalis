@@ -36,7 +36,7 @@ jobs:
           node-version: 22
       - run: pnpm install --no-frozen-lockfile
       - name: Install Solana devnet proof-of-work faucet CLI
-        run: cargo install devnet-pow --locked
+        run: cargo install devnet-pow
       - name: Prove Solana payment-channel lifecycle on devnet
         run: pnpm --filter @canalis/channel-spike devnet:proof
         env:
