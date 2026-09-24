@@ -4,7 +4,8 @@ import { getCanalisApplication } from "../../../server/canalis";
 
 export async function GET() {
   try {
-    const providers = await getCanalisApplication().listProviders();
+    const application = await getCanalisApplication();
+    const providers = await application.listProviders();
     return NextResponse.json({ providers });
   } catch (error) {
     return apiErrorResponse(error);
