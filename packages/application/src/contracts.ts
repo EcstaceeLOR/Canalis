@@ -19,6 +19,13 @@ const moneySchema = z
   .trim()
   .regex(/^(0|[1-9]\d*)(\.\d{1,6})?$/, "Use a non-negative USDC amount with at most 6 decimals.");
 
+export const providerIdSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(80)
+  .regex(/^[a-z0-9][a-z0-9._:-]*$/i, "Use a valid provider ID.");
+
 export const createTaskRequestSchema = z
   .object({
     owner: z.string().trim().min(1).max(128).default("demo-owner"),
@@ -26,11 +33,11 @@ export const createTaskRequestSchema = z
     budgetUsd: moneySchema.default("1.00"),
     maxPerCallUsd: moneySchema.default("0.25"),
     allowedProviders: z
-      .array(z.enum(deterministicProviderIds))
+      .array(providerIdSchema)
       .min(1)
-      .max(deterministicProviderIds.length)
+      .max(12)
       .default([...deterministicProviderIds]),
-    mode: z.enum(["deterministic", "x402"]).default("deterministic"),
+    mode: z.enum(["deterministic", "x402", "mpp"]).default("deterministic"),
     initialStatus: z.enum(["draft", "active"]).default("active"),
     expiryMinutes: z.coerce.number().int().min(1).max(10_080).default(15),
   })
