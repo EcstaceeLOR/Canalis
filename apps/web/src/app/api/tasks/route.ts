@@ -5,7 +5,10 @@ import {
 } from "@canalis/application";
 import { apiErrorResponse, readJsonBody } from "../../../server/api";
 import { requireWalletSession } from "../../../server/auth";
-import { getCanalisApplication } from "../../../server/canalis";
+import {
+  getCanalisApplication,
+  getProviderRegistry,
+} from "../../../server/canalis";
 import { getTaskWorkspaceRepository } from "../../../server/tasks";
 
 export async function GET(request: Request) {
@@ -23,7 +26,11 @@ export async function POST(request: Request) {
   try {
     const identity = await requireWalletSession(request);
     const input = parseTaskWorkspaceCreate(await readJsonBody(request));
-    const application = await getCanalisApplication();
+    const [application, registry] = await Promise.all([
+      getCanalisApplication(),
+      getProviderRegistry(),
+    ]);
+    await registry.validateTaskSelection(input.allowedProviders, input.mode);
     const repository = await getTaskWorkspaceRepository();
     const task = await application.createTask({
       owner: identity.walletAddress,
