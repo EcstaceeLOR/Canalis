@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { TaskStatus } from "@canalis/core";
-import { deterministicProviderIds } from "./contracts.js";
+import { deterministicProviderIds, providerIdSchema } from "./contracts.js";
 import { ApplicationError } from "./errors.js";
 
 const money = z
@@ -16,12 +16,12 @@ export const taskWorkspaceCreateSchema = z.object({
   maxPerCallUsd: money.default("0.25"),
   expiryMinutes: z.coerce.number().int().min(1).max(10_080).default(60),
   allowedProviders: z
-    .array(z.enum(deterministicProviderIds))
+    .array(providerIdSchema)
     .min(1)
-    .max(deterministicProviderIds.length)
+    .max(12)
     .default([...deterministicProviderIds]),
   policyId: z.string().trim().min(1).max(80).default("inline-bounded"),
-  mode: z.enum(["deterministic", "x402"]).default("deterministic"),
+  mode: z.enum(["deterministic", "x402", "mpp"]).default("deterministic"),
   saveAsDraft: z.boolean().default(false),
 }).strict();
 

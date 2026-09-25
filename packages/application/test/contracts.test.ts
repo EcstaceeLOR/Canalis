@@ -7,8 +7,14 @@ describe("application contracts", () => {
     expect(parseUsdc("0.25")).toBe(250_000n);
   });
 
-  it("rejects unknown fields and invalid providers", () => {
+  it("accepts stable provider registry IDs while rejecting malformed IDs", () => {
+    expect(
+      parseCreateTaskRequest({
+        allowedProviders: ["search", "weather-x402.v1"],
+        mode: "x402",
+      }).allowedProviders,
+    ).toEqual(["search", "weather-x402.v1"]);
     expect(() => parseCreateTaskRequest({ budgetUsd: "1.00", surprise: true })).toThrow();
-    expect(() => parseCreateTaskRequest({ allowedProviders: ["unknown"] })).toThrow();
+    expect(() => parseCreateTaskRequest({ allowedProviders: ["bad provider!"] })).toThrow();
   });
 });

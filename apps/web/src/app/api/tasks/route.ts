@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import {
-  parseTaskListQuery,
-  parseTaskWorkspaceCreate,
-} from "@canalis/application";
+import { parseTaskListQuery, parseTaskWorkspaceCreate } from "@canalis/application";
 import { apiErrorResponse, readJsonBody } from "../../../server/api";
 import { requireWalletSession } from "../../../server/auth";
 import { getCanalisApplication } from "../../../server/canalis";
+import { assertTaskProvidersAvailable } from "../../../server/provider-selection";
 import { getTaskWorkspaceRepository } from "../../../server/tasks";
 
 export async function GET(request: Request) {
@@ -23,6 +21,13 @@ export async function POST(request: Request) {
   try {
     const identity = await requireWalletSession(request);
     const input = parseTaskWorkspaceCreate(await readJsonBody(request));
+    await assertTaskProvidersAvailable(
+      identity.walletAddress,
+      input.allowedProviders,
+      input.mode,
+      { requireRuntime: !input.saveAsDraft },
+    );
+
     const application = await getCanalisApplication();
     const repository = await getTaskWorkspaceRepository();
     const task = await application.createTask({

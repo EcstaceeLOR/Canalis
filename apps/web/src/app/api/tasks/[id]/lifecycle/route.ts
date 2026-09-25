@@ -3,6 +3,7 @@ import { ApplicationError, parseTaskLifecycle } from "@canalis/application";
 import { apiErrorResponse, readJsonBody } from "../../../../../server/api";
 import { assertWalletOwnsTask, requireWalletSession } from "../../../../../server/auth";
 import { getCanalisApplication } from "../../../../../server/canalis";
+import { assertTaskProvidersAvailable } from "../../../../../server/provider-selection";
 import { getTaskWorkspaceRepository } from "../../../../../server/tasks";
 
 function atomicToUsd(value: string) {
@@ -48,6 +49,14 @@ export async function POST(
           ? ["draft", "active"]
           : ["draft", "completed", "cancelled"];
       assertTransition(existing.task.status, allowed, action);
+      if (action === "submit") {
+        await assertTaskProvidersAvailable(
+          identity.walletAddress,
+          existing.task.allowedProviders,
+          existing.task.mode,
+          { requireRuntime: true },
+        );
+      }
       const nextStatus = action === "submit" ? "active" : action === "cancel" ? "cancelled" : "archived";
       const now = BigInt(Math.floor(Date.now() / 1000));
       await repository.setStatus(
@@ -64,6 +73,12 @@ export async function POST(
 
     if (action === "rerun") {
       assertTransition(existing.task.status, ["completed", "cancelled", "archived"], action);
+      await assertTaskProvidersAvailable(
+        identity.walletAddress,
+        existing.task.allowedProviders,
+        existing.task.mode,
+        { requireRuntime: true },
+      );
     }
 
     const expiryMinutes = Math.max(1, Math.min(10_080, Number(durationSeconds / 60n)));
@@ -74,7 +89,7 @@ export async function POST(
       maxPerCallUsd: atomicToUsd(existing.task.maxPerCallAtomic ?? existing.task.budgetAtomic),
       expiryMinutes,
       allowedProviders: existing.task.allowedProviders,
-      mode: "deterministic",
+      mode: existing.task.mode,
       initialStatus: action === "rerun" ? "active" : "draft",
     });
     const suffix = action === "rerun" ? "rerun" : "copy";

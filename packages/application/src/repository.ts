@@ -7,6 +7,11 @@ import type {
 } from "@canalis/core";
 import type { ProviderMetadata } from "@canalis/providers";
 import type { JsonObject, ProviderMode } from "./contracts.js";
+import type {
+  ProviderHealthStatus,
+  ProviderPricingModel,
+  ProviderRegistryStatus,
+} from "./provider-registry.js";
 
 export type PersistedTask = Task & {
   mode: ProviderMode;
@@ -17,6 +22,16 @@ export type PersistedProvider = ProviderMetadata & {
   mode: ProviderMode;
   endpoint?: string;
   config?: JsonObject;
+  ownerWallet?: string;
+  systemManaged?: boolean;
+  status?: ProviderRegistryStatus;
+  healthStatus?: ProviderHealthStatus;
+  supportedNetworks?: string[];
+  supportedAssets?: string[];
+  pricingModel?: ProviderPricingModel;
+  fixedPriceAtomic?: bigint;
+  defaultChannelCeilingAtomic?: bigint;
+  policyMetadata?: JsonObject;
 };
 
 export type ChannelStatus =
@@ -68,7 +83,7 @@ export interface CanalisRepository {
   getChannels(taskId: string): Promise<PersistedChannel[]>;
   getFlows(taskId: string): Promise<RouteFlow[]>;
   getSettlements(taskId: string): Promise<RouteSettlementRecord[]>;
-  listProviders(): Promise<PersistedProvider[]>;
+  listProviders(ownerWallet?: string): Promise<PersistedProvider[]>;
   saveExecution(
     taskId: string,
     graph: TaskPaymentGraph,
