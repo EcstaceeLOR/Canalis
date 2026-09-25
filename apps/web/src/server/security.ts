@@ -147,13 +147,13 @@ export async function runIdempotentMutation(input: {
   const fingerprint = await requestFingerprint(input.request, input.operation, input.resourceKey);
   const key = idempotencyKey(input.request, fingerprint.hash);
   const ttlSeconds = boundedEnv("CANALIS_IDEMPOTENCY_TTL_SECONDS", 86_400, 300, 172_800);
-  const begin = await store.beginIdempotency({
+  const identity = {
     ownerWallet: input.ownerWallet,
     operation: input.operation,
     idempotencyKey: key,
     requestHash: fingerprint.hash,
-    ttlSeconds,
-  });
+  };
+  const begin = await store.beginIdempotency({ ...identity, ttlSeconds });
 
   if (begin.status === "conflict") {
     throw new ApplicationError(
@@ -190,6 +190,7 @@ export async function runIdempotentMutation(input: {
       holderKey,
     });
     if (!locked) {
+      await store.abandonIdempotency(identity);
       throw new ApplicationError(
         "CONCURRENT_MUTATION",
         "Another mutation is already changing this resource. Retry after it finishes.",
@@ -207,10 +208,7 @@ export async function runIdempotentMutation(input: {
     }
     const snapshot = await responseSnapshot(response);
     await store.completeIdempotency({
-      ownerWallet: input.ownerWallet,
-      operation: input.operation,
-      idempotencyKey: key,
-      requestHash: fingerprint.hash,
+      ...identity,
       responseStatus: snapshot.status,
       responseBody: snapshot.body,
       responseContentType: snapshot.contentType,
