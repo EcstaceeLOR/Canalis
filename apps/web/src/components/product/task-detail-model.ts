@@ -54,7 +54,16 @@ export type TaskDetailPayload = {
     mint: string;
     budgetAtomic: string;
     allowedProviders: string[];
+    blockedProviders: string[];
     maxPerCallAtomic?: string;
+    providerCapsAtomic: Record<string, string>;
+    allowedNetworks: string[];
+    allowedMints: string[];
+    allowedProtocols: string[];
+    policySourceId?: string;
+    policySourceVersion?: number;
+    policySourceName?: string;
+    policyOverrides: Record<string, unknown>;
     createdAtUnixSeconds: string;
     expiresAtUnixSeconds: string;
   };
@@ -90,6 +99,9 @@ export type TaskDetailPayload = {
     name: string;
     description: string;
     policyId: string;
+    policyVersion?: number;
+    policyName?: string;
+    hasPolicyOverrides?: boolean;
     updatedAtUnixSeconds: string;
   } | null;
 };
@@ -158,6 +170,20 @@ export function buildTaskTimeline(payload: TaskDetailPayload): TimelineEvent[] {
     stage: "task",
     title: "Task created",
     detail: `${payload.task.mode} task created with ${payload.task.allowedProviders.length} provider route${payload.task.allowedProviders.length === 1 ? "" : "s"}.`,
+  });
+
+  add({
+    id: `${payload.task.id}:policy-snapshot`,
+    timestampUnixSeconds: payload.task.createdAtUnixSeconds,
+    tone: "neutral",
+    stage: "policy",
+    title: "Policy snapshot locked",
+    detail: payload.task.policySourceId
+      ? `${payload.task.policySourceName ?? "Reusable policy"} v${payload.task.policySourceVersion ?? "?"} was copied into this task with ${Object.keys(payload.task.policyOverrides).length} explicit override${Object.keys(payload.task.policyOverrides).length === 1 ? "" : "s"}.`
+      : "Inline bounded policy was materialized into this task as an immutable spending snapshot.",
+    evidence: payload.task.policySourceId
+      ? { label: "Policy version", value: `${payload.task.policySourceId}@v${payload.task.policySourceVersion ?? "?"}` }
+      : { label: "Policy", value: "inline-bounded" },
   });
 
   for (const flow of payload.graph.flows) {

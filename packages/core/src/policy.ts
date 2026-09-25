@@ -21,6 +21,9 @@ export function evaluateSpend(proposal: SpendProposal): PolicyDecision {
     nextProviderCumulativeAtomic,
     channelCeilingAtomic,
     nowUnixSeconds,
+    mint,
+    network,
+    protocol,
   } = proposal;
 
   if (ledger.taskId !== task.id) {
@@ -45,11 +48,34 @@ export function evaluateSpend(proposal: SpendProposal): PolicyDecision {
     return reject("INVALID_AMOUNT", "A paid flow must have a positive amount.");
   }
 
+  if (task.policy.blockedProviderIds?.includes(providerId)) {
+    return reject("PROVIDER_BLOCKED", "The provider is explicitly blocked by this task policy.");
+  }
+
   if (!task.policy.allowedProviderIds.includes(providerId)) {
     return reject(
       "PROVIDER_NOT_ALLOWED",
       "The provider is not allowed by this task policy.",
     );
+  }
+
+  if (mint && task.policy.allowedMints?.length && !task.policy.allowedMints.includes(mint)) {
+    return reject("MINT_NOT_ALLOWED", `The quoted asset ${mint} is not allowed by this task policy.`);
+  }
+
+  if (protocol && task.policy.allowedProtocols?.length && !task.policy.allowedProtocols.includes(protocol)) {
+    return reject("PROTOCOL_NOT_ALLOWED", `The ${protocol} protocol is not allowed by this task policy.`);
+  }
+
+  if (task.policy.allowedNetworks?.length) {
+    if (!network || !task.policy.allowedNetworks.includes(network)) {
+      return reject(
+        "NETWORK_NOT_ALLOWED",
+        network
+          ? `The provider network ${network} is not allowed by this task policy.`
+          : "The provider quote does not declare a network required by this task policy.",
+      );
+    }
   }
 
   const perCallCap = task.policy.maxPerCallAtomic;

@@ -136,6 +136,9 @@ export class CanalisRouteOrchestrator {
       if (!providers[reservation.providerId]) {
         throw new Error(`cannot reserve unknown provider: ${reservation.providerId}`);
       }
+      if (task.policy.blockedProviderIds?.includes(reservation.providerId)) {
+        throw new Error(`cannot reserve explicitly blocked provider: ${reservation.providerId}`);
+      }
       if (!task.policy.allowedProviderIds.includes(reservation.providerId)) {
         throw new Error(
           `cannot reserve provider outside task allowlist: ${reservation.providerId}`,
@@ -210,6 +213,9 @@ export class CanalisRouteOrchestrator {
           nextProviderCumulativeAtomic: nextCumulativeAtomic,
           channelCeilingAtomic: state.channelCeilingAtomic,
           nowUnixSeconds: createdAtUnixSeconds,
+          mint: quote.mint,
+          protocol: quote.protocol,
+          network: quote.protocolMetadata?.network,
         });
 
         if (!decision.allowed) {

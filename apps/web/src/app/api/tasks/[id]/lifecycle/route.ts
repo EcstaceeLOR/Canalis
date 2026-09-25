@@ -36,9 +36,7 @@ export async function POST(
     const existing = await application.getTask(id);
     assertWalletOwnsTask(existing, identity);
     const workspace = await repository.getSummary(id, identity.walletAddress);
-    if (!workspace) {
-      throw new ApplicationError("TASK_NOT_FOUND", "Task not found.", 404);
-    }
+    if (!workspace) throw new ApplicationError("TASK_NOT_FOUND", "Task not found.", 404);
 
     const durationSeconds = BigInt(existing.task.expiresAtUnixSeconds) - BigInt(existing.task.createdAtUnixSeconds);
 
@@ -82,6 +80,9 @@ export async function POST(
     }
 
     const expiryMinutes = Math.max(1, Math.min(10_080, Number(durationSeconds / 60n)));
+    const providerCapsUsd = Object.fromEntries(
+      Object.entries(existing.task.providerCapsAtomic).map(([providerId, atomic]) => [providerId, atomicToUsd(atomic)]),
+    );
     const created = await application.createTask({
       owner: identity.walletAddress,
       agentId: existing.task.agentId,
@@ -89,6 +90,15 @@ export async function POST(
       maxPerCallUsd: atomicToUsd(existing.task.maxPerCallAtomic ?? existing.task.budgetAtomic),
       expiryMinutes,
       allowedProviders: existing.task.allowedProviders,
+      blockedProviders: existing.task.blockedProviders,
+      providerCapsUsd,
+      allowedNetworks: existing.task.allowedNetworks,
+      allowedMints: existing.task.allowedMints,
+      allowedProtocols: existing.task.allowedProtocols.length ? existing.task.allowedProtocols : [existing.task.mode === "deterministic" ? "demo" : existing.task.mode],
+      ...(existing.task.policySourceId ? { policySourceId: existing.task.policySourceId } : {}),
+      ...(existing.task.policySourceVersion ? { policySourceVersion: existing.task.policySourceVersion } : {}),
+      policySourceName: existing.task.policySourceName ?? "Inline bounded policy",
+      policyOverrides: existing.task.policyOverrides,
       mode: existing.task.mode,
       initialStatus: action === "rerun" ? "active" : "draft",
     });
@@ -97,7 +107,7 @@ export async function POST(
       taskId: created.task.id,
       name: `${workspace.name} · ${suffix}`.slice(0, 120),
       description: workspace.description,
-      policyId: workspace.policyId,
+      policyId: existing.task.policySourceId ?? "inline-bounded",
     });
     const createdWorkspace = await repository.getSummary(created.task.id, identity.walletAddress);
     return NextResponse.json({ ...created, workspace: createdWorkspace }, { status: 201 });

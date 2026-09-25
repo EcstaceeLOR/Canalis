@@ -30,14 +30,19 @@ function objectValue(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
+function jsonSafe(value: unknown) {
+  return JSON.parse(JSON.stringify(value ?? {}));
+}
+
 function mapTask(row: Record<string, unknown>): PersistedTask {
   const capsRaw = objectValue(row.provider_caps_atomic) ?? {};
   const providerCapsAtomic = Object.fromEntries(
     Object.entries(capsRaw).map(([key, value]) => [key, big(value)]),
   );
-  const allowed = Array.isArray(row.allowed_provider_ids)
-    ? row.allowed_provider_ids.map(String)
-    : [];
 
   return {
     id: String(row.id),
@@ -49,11 +54,25 @@ function mapTask(row: Record<string, unknown>): PersistedTask {
       totalAtomic: big(row.budget_atomic),
     },
     policy: {
-      allowedProviderIds: allowed,
+      allowedProviderIds: stringArray(row.allowed_provider_ids),
+      blockedProviderIds: stringArray(row.blocked_provider_ids),
       ...(row.max_per_call_atomic !== null && row.max_per_call_atomic !== undefined
         ? { maxPerCallAtomic: big(row.max_per_call_atomic) }
         : {}),
       providerCapsAtomic,
+      allowedNetworks: stringArray(row.allowed_networks),
+      allowedMints: stringArray(row.allowed_mints),
+      allowedProtocols: stringArray(row.allowed_protocols),
+      ...(optionalString(row.policy_definition_id)
+        ? { sourcePolicyId: optionalString(row.policy_definition_id) }
+        : {}),
+      ...(row.policy_version !== null && row.policy_version !== undefined
+        ? { sourcePolicyVersion: Number(row.policy_version) }
+        : {}),
+      ...(optionalString(row.policy_name)
+        ? { sourcePolicyName: optionalString(row.policy_name) }
+        : {}),
+      overrides: objectValue(row.overrides) ?? {},
     },
     status: String(row.status) as PersistedTask["status"],
     createdAtUnixSeconds: big(row.created_at_unix),
@@ -95,6 +114,13 @@ function mapChannel(row: Record<string, unknown>): PersistedChannel {
   };
 }
 
+const taskPolicySelect = `
+  p.allowed_provider_ids, p.blocked_provider_ids, p.max_per_call_atomic,
+  p.provider_caps_atomic, p.allowed_networks, p.allowed_mints,
+  p.allowed_protocols, p.policy_definition_id, p.policy_version,
+  p.policy_name, p.overrides
+`;
+
 export class PostgresCanalisRepository implements CanalisRepository {
   private readonly sql: Sql;
 
@@ -127,10 +153,22 @@ export class PostgresCanalisRepository implements CanalisRepository {
       );
       await tx`
         INSERT INTO policies (
-          task_id, allowed_provider_ids, max_per_call_atomic, provider_caps_atomic
+          task_id, policy_definition_id, policy_version, policy_name,
+          total_ceiling_atomic, allowed_provider_ids, blocked_provider_ids,
+          max_per_call_atomic, provider_caps_atomic, allowed_networks,
+          allowed_mints, allowed_protocols, overrides
         ) VALUES (
-          ${task.id}, ${tx.json([...task.policy.allowedProviderIds])},
-          ${task.policy.maxPerCallAtomic?.toString() ?? null}, ${tx.json(caps)}
+          ${task.id}, ${task.policy.sourcePolicyId ?? null},
+          ${task.policy.sourcePolicyVersion ?? null},
+          ${task.policy.sourcePolicyName ?? "Inline bounded policy"},
+          ${task.budget.totalAtomic.toString()},
+          ${tx.json([...task.policy.allowedProviderIds])},
+          ${tx.json([...(task.policy.blockedProviderIds ?? [])])},
+          ${task.policy.maxPerCallAtomic?.toString() ?? null}, ${tx.json(caps)},
+          ${tx.json([...(task.policy.allowedNetworks ?? [])])},
+          ${tx.json([...(task.policy.allowedMints ?? [])])},
+          ${tx.json([...(task.policy.allowedProtocols ?? [])])},
+          ${tx.json(jsonSafe(task.policy.overrides))}
         )
       `;
 
@@ -162,24 +200,26 @@ export class PostgresCanalisRepository implements CanalisRepository {
   }
 
   async getTask(taskId: string): Promise<PersistedTask | null> {
-    const rows = await this.sql<Record<string, unknown>[]>`
-      SELECT t.*, p.allowed_provider_ids, p.max_per_call_atomic, p.provider_caps_atomic
-      FROM tasks t
-      JOIN policies p ON p.task_id = t.id
-      WHERE t.id = ${taskId}
-      LIMIT 1
-    `;
+    const rows = await this.sql.unsafe<Record<string, unknown>[]>(
+      `SELECT t.*, ${taskPolicySelect}
+       FROM tasks t
+       JOIN policies p ON p.task_id = t.id
+       WHERE t.id = $1
+       LIMIT 1`,
+      [taskId],
+    );
     return rows[0] ? mapTask(rows[0]) : null;
   }
 
   async listTasks(limit = 50): Promise<PersistedTask[]> {
-    const rows = await this.sql<Record<string, unknown>[]>`
-      SELECT t.*, p.allowed_provider_ids, p.max_per_call_atomic, p.provider_caps_atomic
-      FROM tasks t
-      JOIN policies p ON p.task_id = t.id
-      ORDER BY t.updated_at_unix DESC
-      LIMIT ${limit}
-    `;
+    const rows = await this.sql.unsafe<Record<string, unknown>[]>(
+      `SELECT t.*, ${taskPolicySelect}
+       FROM tasks t
+       JOIN policies p ON p.task_id = t.id
+       ORDER BY t.updated_at_unix DESC
+       LIMIT $1`,
+      [limit],
+    );
     return rows.map(mapTask);
   }
 

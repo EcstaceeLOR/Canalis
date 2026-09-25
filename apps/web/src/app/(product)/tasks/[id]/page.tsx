@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DemoTaskRunner } from "../../../../components/product/demo-task-runner";
 import { LiveChannelPanel } from "../../../../components/product/live-channel-panel";
 import { PageHeader } from "../../../../components/product/page-header";
+import { TaskPolicySnapshot } from "../../../../components/product/task-policy-snapshot";
 import { TaskRecord } from "../../../../components/product/task-record";
 
 export const metadata = { title: "Task record" };
@@ -32,9 +33,10 @@ export default async function TaskDetailPage({
       <PageHeader
         eyebrow="Task operations"
         title="Task record"
-        description="Inspect durable configuration, provider execution, receipts, payment graph state, channel evidence and recovery controls for this wallet-owned task."
+        description="Inspect durable configuration, the exact policy snapshot and overrides, provider execution, receipts, payment graph state, channel evidence and recovery controls for this wallet-owned task."
         actions={<Link href="/tasks" className="secondary-action">Back to tasks</Link>}
       />
+      <TaskPolicySnapshot taskId={id} />
       <LiveChannelPanel taskId={id} />
       <TaskRecord taskId={id} />
     </div>

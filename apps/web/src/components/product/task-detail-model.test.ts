@@ -17,7 +17,14 @@ const basePayload: TaskDetailPayload = {
     mint: "USDC",
     budgetAtomic: "1000000",
     allowedProviders: ["search"],
+    blockedProviders: [],
     maxPerCallAtomic: "250000",
+    providerCapsAtomic: {},
+    allowedNetworks: [],
+    allowedMints: ["USDC"],
+    allowedProtocols: ["demo"],
+    policySourceName: "Inline bounded policy",
+    policyOverrides: {},
     createdAtUnixSeconds: "100",
     expiresAtUnixSeconds: "1000",
   },
@@ -80,21 +87,25 @@ const basePayload: TaskDetailPayload = {
     name: "Search task",
     description: "Test task",
     policyId: "inline-bounded",
+    policyName: "Inline bounded policy",
+    hasPolicyOverrides: false,
     updatedAtUnixSeconds: "102",
   },
 };
 
 describe("task detail model", () => {
-  it("builds request, quote, authorization and receipt events from persisted flow data", () => {
+  it("builds policy, request, quote, authorization and receipt events from persisted data", () => {
     const events = buildTaskTimeline(basePayload);
     expect(events.map((event) => event.stage)).toEqual([
       "task",
+      "policy",
       "request",
       "quote",
       "authorization",
       "response",
       "task",
     ]);
+    expect(events.find((event) => event.title === "Policy snapshot locked")?.evidence?.value).toBe("inline-bounded");
     expect(events.find((event) => event.title === "Response receipt stored")?.evidence?.value).toBe("hash_1");
   });
 

@@ -7,8 +7,16 @@ export type Budget = {
 
 export type Policy = {
   allowedProviderIds: readonly string[];
+  blockedProviderIds?: readonly string[];
   maxPerCallAtomic?: bigint;
   providerCapsAtomic?: Readonly<Record<string, bigint>>;
+  allowedNetworks?: readonly string[];
+  allowedMints?: readonly string[];
+  allowedProtocols?: readonly string[];
+  sourcePolicyId?: string;
+  sourcePolicyVersion?: number;
+  sourcePolicyName?: string;
+  overrides?: Readonly<Record<string, unknown>>;
 };
 
 export type Task = {
@@ -37,6 +45,9 @@ export type SpendProposal = {
   nextProviderCumulativeAtomic: bigint;
   channelCeilingAtomic: bigint;
   nowUnixSeconds: bigint;
+  mint?: string;
+  network?: string;
+  protocol?: string;
 };
 
 export type PolicyRejectionCode =
@@ -44,7 +55,11 @@ export type PolicyRejectionCode =
   | "TASK_EXPIRED"
   | "INVALID_AMOUNT"
   | "PROVIDER_NOT_ALLOWED"
+  | "PROVIDER_BLOCKED"
   | "PER_CALL_CAP_EXCEEDED"
+  | "NETWORK_NOT_ALLOWED"
+  | "MINT_NOT_ALLOWED"
+  | "PROTOCOL_NOT_ALLOWED"
   | "NON_MONOTONIC_VOUCHER"
   | "VOUCHER_DELTA_MISMATCH"
   | "CHANNEL_CEILING_EXCEEDED"

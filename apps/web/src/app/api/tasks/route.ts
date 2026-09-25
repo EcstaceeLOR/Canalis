@@ -4,6 +4,7 @@ import { apiErrorResponse, readJsonBody } from "../../../server/api";
 import { requireWalletSession } from "../../../server/auth";
 import { getCanalisApplication } from "../../../server/canalis";
 import { assertTaskProvidersAvailable } from "../../../server/provider-selection";
+import { resolveTaskPolicy } from "../../../server/task-policy";
 import { getTaskWorkspaceRepository } from "../../../server/tasks";
 
 export async function GET(request: Request) {
@@ -21,9 +22,11 @@ export async function POST(request: Request) {
   try {
     const identity = await requireWalletSession(request);
     const input = parseTaskWorkspaceCreate(await readJsonBody(request));
+    const resolved = await resolveTaskPolicy(identity.walletAddress, input);
+
     await assertTaskProvidersAvailable(
       identity.walletAddress,
-      input.allowedProviders,
+      resolved.rules.allowedProviders,
       input.mode,
       { requireRuntime: !input.saveAsDraft },
     );
@@ -33,10 +36,19 @@ export async function POST(request: Request) {
     const task = await application.createTask({
       owner: identity.walletAddress,
       agentId: input.agentId,
-      budgetUsd: input.budgetUsd,
-      maxPerCallUsd: input.maxPerCallUsd,
-      expiryMinutes: input.expiryMinutes,
-      allowedProviders: input.allowedProviders,
+      budgetUsd: resolved.rules.totalCeilingUsd,
+      maxPerCallUsd: resolved.rules.maxPerCallUsd,
+      expiryMinutes: resolved.rules.durationMinutes,
+      allowedProviders: resolved.rules.allowedProviders,
+      blockedProviders: resolved.rules.blockedProviders,
+      providerCapsUsd: resolved.rules.providerCapsUsd,
+      allowedNetworks: resolved.rules.allowedNetworks,
+      allowedMints: resolved.rules.allowedMints,
+      allowedProtocols: resolved.rules.allowedProtocols,
+      ...(resolved.sourcePolicyId ? { policySourceId: resolved.sourcePolicyId } : {}),
+      ...(resolved.sourcePolicyVersion ? { policySourceVersion: resolved.sourcePolicyVersion } : {}),
+      policySourceName: resolved.sourcePolicyName,
+      policyOverrides: resolved.overrides,
       mode: input.mode,
       initialStatus: input.saveAsDraft ? "draft" : "active",
     });
@@ -44,7 +56,7 @@ export async function POST(request: Request) {
       taskId: task.task.id,
       name: input.name,
       description: input.description,
-      policyId: input.policyId,
+      policyId: resolved.sourcePolicyId ?? "inline-bounded",
     });
     const workspace = await repository.getSummary(task.task.id, identity.walletAddress);
     return NextResponse.json({ ...task, workspace }, { status: 201 });
