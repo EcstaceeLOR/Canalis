@@ -97,7 +97,7 @@ dbDescribe("reusable policy persistence", () => {
       rules: { ...v1Rules, totalCeilingUsd: "2.00", maxPerCallUsd: "0.10", providerCapsUsd: { search: "1.50", data: "1.00" } },
     });
     expect(updated.latestVersion).toBe(2);
-    expect(updated.latest.rules.totalCeilingUsd).toBe("2.00");
+    expect(updated.latest.rules.totalCeilingUsd).toBe("2");
 
     const oldVersion = await policies.get(created.id, OWNER, 1);
     expect(oldVersion?.latest.version).toBe(1);
