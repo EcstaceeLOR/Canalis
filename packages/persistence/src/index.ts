@@ -7,6 +7,7 @@ export * from "./operations.js";
 export * from "./policies.js";
 export * from "./postgres.js";
 export * from "./providers.js";
+export * from "./security.js";
 export * from "./settings.js";
 export * from "./tasks.js";
 export * from "./transactions.js";
