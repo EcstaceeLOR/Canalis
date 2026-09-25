@@ -34,6 +34,10 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String) : [];
 }
 
+function jsonSafe(value: unknown) {
+  return JSON.parse(JSON.stringify(value ?? {}));
+}
+
 function mapTask(row: Record<string, unknown>): PersistedTask {
   const capsRaw = objectValue(row.provider_caps_atomic) ?? {};
   const providerCapsAtomic = Object.fromEntries(
@@ -164,7 +168,7 @@ export class PostgresCanalisRepository implements CanalisRepository {
           ${tx.json([...(task.policy.allowedNetworks ?? [])])},
           ${tx.json([...(task.policy.allowedMints ?? [])])},
           ${tx.json([...(task.policy.allowedProtocols ?? [])])},
-          ${tx.json((task.policy.overrides ?? {}) as Record<string, unknown>)}
+          ${tx.json(jsonSafe(task.policy.overrides))}
         )
       `;
 
