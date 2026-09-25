@@ -54,7 +54,7 @@ export class PostgresSecurityRepository {
     leaseSeconds?: number;
     ttlSeconds?: number;
   }): Promise<IdempotencyBeginResult> {
-    const leaseSeconds = Math.max(15, Math.min(300, input.leaseSeconds ?? 120));
+    const leaseSeconds = Math.max(30, Math.min(300, input.leaseSeconds ?? 300));
     const ttlSeconds = Math.max(300, Math.min(172_800, input.ttlSeconds ?? 86_400));
 
     await this.sql`
@@ -166,7 +166,7 @@ export class PostgresSecurityRepository {
     holderKey: string;
     ttlSeconds?: number;
   }): Promise<boolean> {
-    const ttlSeconds = Math.max(10, Math.min(300, input.ttlSeconds ?? 120));
+    const ttlSeconds = Math.max(30, Math.min(300, input.ttlSeconds ?? 300));
     const rows = await this.sql<{ holder_key: string }[]>`
       INSERT INTO mutation_locks (
         resource_key, owner_wallet, operation, holder_key, acquired_at, expires_at
