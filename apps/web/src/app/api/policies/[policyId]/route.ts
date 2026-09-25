@@ -3,6 +3,7 @@ import { ApplicationError, parseReusablePolicyUpdate } from "@canalis/applicatio
 import { apiErrorResponse, readJsonBody } from "../../../../server/api";
 import { requireWalletSession } from "../../../../server/auth";
 import { getPolicyRepository } from "../../../../server/policies";
+import { assertPolicyProvidersExist } from "../../../../server/policy-validation";
 
 export async function GET(
   request: Request,
@@ -33,6 +34,7 @@ export async function PATCH(
     const identity = await requireWalletSession(request);
     const { policyId } = await params;
     const input = parseReusablePolicyUpdate(await readJsonBody(request));
+    if (input.rules) await assertPolicyProvidersExist(identity.walletAddress, input.rules);
     const repository = await getPolicyRepository();
     const policy = await repository.update(policyId, identity.walletAddress, input);
     return NextResponse.json({ policy });
