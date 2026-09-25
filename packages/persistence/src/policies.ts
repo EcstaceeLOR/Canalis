@@ -5,9 +5,8 @@ import {
   type PolicyRecord,
   type PolicyVersionRecord,
   type ReusablePolicyRules,
-  type ReusablePolicyRulesInput,
 } from "@canalis/application";
-import postgres, { type Sql } from "postgres";
+import postgres, { type Sql, type TransactionSql } from "postgres";
 
 function unix(value: unknown): string {
   const date = value instanceof Date ? value : new Date(String(value));
@@ -84,7 +83,7 @@ export class PostgresPolicyRepository {
     this.sql = postgres(databaseUrl, { max: 5, prepare: false });
   }
 
-  private versionInsert(tx: Sql, id: string, version: number, rules: ReusablePolicyRules) {
+  private versionInsert(tx: TransactionSql, id: string, version: number, rules: ReusablePolicyRules) {
     return tx`
       INSERT INTO reusable_policy_versions (
         policy_id, version, total_ceiling_atomic, max_per_call_atomic,
