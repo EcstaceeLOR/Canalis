@@ -3,7 +3,12 @@ import { ApplicationError } from "./errors.js";
 
 export const deterministicProviderIds = ["search", "data", "inference"] as const;
 export type DeterministicProviderId = (typeof deterministicProviderIds)[number];
-export type ProviderMode = "deterministic" | "x402" | "mpp";
+export const providerProtocols = ["demo", "x402", "mpp"] as const;
+export const providerModes = ["deterministic", "x402", "mpp"] as const;
+export const providerHealthStatuses = ["unknown", "healthy", "unhealthy"] as const;
+export type ProviderMode = (typeof providerModes)[number];
+export type ProviderProtocol = (typeof providerProtocols)[number];
+export type ProviderHealthStatus = (typeof providerHealthStatuses)[number];
 
 export type JsonValue =
   | string
@@ -14,10 +19,156 @@ export type JsonValue =
   | { [key: string]: JsonValue };
 export type JsonObject = Record<string, any>;
 
+const idSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(64)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use a lowercase provider slug such as market-data.");
+const atomicSchema = z.string().trim().regex(/^\d+$/, "Use an integer atomic amount.");
 const moneySchema = z
   .string()
   .trim()
   .regex(/^(0|[1-9]\d*)(\.\d{1,6})?$/, "Use a non-negative USDC amount with at most 6 decimals.");
+const stringList = z.array(z.string().trim().min(1).max(160)).min(1).max(20);
+
+export const providerPricingSchema = z
+  .object({
+    kind: z.enum(["fixed-per-call", "metered", "external"]),
+    amountAtomic: atomicSchema.optional(),
+    mint: z.string().trim().min(1).max(128),
+    unit: z.string().trim().min(1).max(64).optional(),
+  })
+  .strict()
+  .superRefine((pricing, ctx) => {
+    if (pricing.kind === "fixed-per-call" && (!pricing.amountAtomic || BigInt(pricing.amountAtomic) <= 0n)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["amountAtomic"],
+        message: "Fixed pricing requires a positive atomic amount.",
+      });
+    }
+  });
+
+const providerFields = {
+  name: z.string().trim().min(2).max(120),
+  payee: z.string().trim().min(1).max(200),
+  protocol: z.enum(providerProtocols),
+  mode: z.enum(providerModes),
+  description: z.string().trim().min(1).max(500),
+  endpoint: z.string().trim().url().max(500).optional(),
+  enabled: z.boolean().default(true),
+  supportedAssets: stringList,
+  supportedNetworks: stringList,
+  pricingModel: providerPricingSchema,
+  defaultChannelCeilingAtomic: atomicSchema.optional(),
+  secretHeaders: z.record(z.string().trim().min(1).max(120), z.string().max(2_000)).optional(),
+} as const;
+
+function validateProviderCombination(
+  value: {
+    protocol?: ProviderProtocol;
+    mode?: ProviderMode;
+    endpoint?: string;
+    pricingModel?: z.infer<typeof providerPricingSchema>;
+    defaultChannelCeilingAtomic?: string;
+  },
+  ctx: z.RefinementCtx,
+) {
+  if (value.protocol && value.mode) {
+    const expectedMode: ProviderMode = value.protocol === "demo" ? "deterministic" : value.protocol;
+    if (value.mode !== expectedMode) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mode"],
+        message: `${value.protocol} providers must use ${expectedMode} mode.`,
+      });
+    }
+  }
+  if (value.protocol && value.protocol !== "demo" && !value.endpoint) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["endpoint"],
+      message: "Protocol-backed providers require an HTTPS endpoint.",
+    });
+  }
+  if (value.endpoint && !value.endpoint.startsWith("https://")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["endpoint"],
+      message: "Provider endpoints must use HTTPS.",
+    });
+  }
+  if (
+    value.defaultChannelCeilingAtomic &&
+    value.pricingModel?.amountAtomic &&
+    BigInt(value.defaultChannelCeilingAtomic) < BigInt(value.pricingModel.amountAtomic)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["defaultChannelCeilingAtomic"],
+      message: "Default channel ceiling cannot be below the fixed per-call price.",
+    });
+  }
+}
+
+export const createProviderRequestSchema = z
+  .object({ id: idSchema, ...providerFields })
+  .strict()
+  .superRefine(validateProviderCombination);
+
+export const updateProviderRequestSchema = z
+  .object({
+    name: providerFields.name.optional(),
+    payee: providerFields.payee.optional(),
+    protocol: providerFields.protocol.optional(),
+    mode: providerFields.mode.optional(),
+    description: providerFields.description.optional(),
+    endpoint: providerFields.endpoint.nullable().optional(),
+    enabled: z.boolean().optional(),
+    supportedAssets: providerFields.supportedAssets.optional(),
+    supportedNetworks: providerFields.supportedNetworks.optional(),
+    pricingModel: providerFields.pricingModel.optional(),
+    defaultChannelCeilingAtomic: providerFields.defaultChannelCeilingAtomic.nullable().optional(),
+    secretHeaders: providerFields.secretHeaders.optional(),
+    clearSecrets: z.boolean().optional(),
+  })
+  .strict();
+
+export type CreateProviderRequest = z.input<typeof createProviderRequestSchema>;
+export type UpdateProviderRequest = z.input<typeof updateProviderRequestSchema>;
+
+export type ProviderDto = {
+  id: string;
+  name: string;
+  payee: string;
+  protocol: ProviderProtocol;
+  mode: ProviderMode;
+  description: string;
+  endpoint?: string;
+  enabled: boolean;
+  supportedAssets: string[];
+  supportedNetworks: string[];
+  pricingModel: z.infer<typeof providerPricingSchema>;
+  defaultChannelCeilingAtomic?: string;
+  health: {
+    status: ProviderHealthStatus;
+    message?: string;
+    lastCheckedAt?: string;
+    lastSuccessAt?: string;
+    lastErrorAt?: string;
+    lastError?: string;
+  };
+  secrets: {
+    configured: boolean;
+    keys: string[];
+  };
+  usage: {
+    tasks: number;
+    channels: number;
+    flows: number;
+  };
+};
 
 export const createTaskRequestSchema = z
   .object({
@@ -26,9 +177,9 @@ export const createTaskRequestSchema = z
     budgetUsd: moneySchema.default("1.00"),
     maxPerCallUsd: moneySchema.default("0.25"),
     allowedProviders: z
-      .array(z.enum(deterministicProviderIds))
+      .array(idSchema)
       .min(1)
-      .max(deterministicProviderIds.length)
+      .max(12)
       .default([...deterministicProviderIds]),
     mode: z.enum(["deterministic", "x402"]).default("deterministic"),
     initialStatus: z.enum(["draft", "active"]).default("active"),
