@@ -49,6 +49,9 @@ type Editable = {
 function modeForProtocol(protocol: Protocol): TaskMode {
   return protocol === "demo" ? "deterministic" : protocol;
 }
+function protocolForMode(mode: TaskMode): Protocol {
+  return mode === "deterministic" ? "demo" : mode;
+}
 function split(value: string) { return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))]; }
 function sameArray(a: readonly string[], b: readonly string[]) { return [...a].sort().join("\u0000") === [...b].sort().join("\u0000"); }
 function sameRecord(a: Record<string, string>, b: Record<string, string>) {
@@ -125,7 +128,7 @@ export function PolicyTaskComposer() {
         const policy = ((await response.json()) as { policy: Policy }).policy;
         if (cancelled) return;
         setSelected(policy);
-        setSelectedVersion(policy.latest.version);
+        if (selectedVersion === undefined) setSelectedVersion(policy.latest.version);
         setForm(editable(policy.latest.rules));
         const firstProtocol = policy.latest.rules.allowedProtocols[0] ?? "demo";
         setMode(modeForProtocol(firstProtocol));
@@ -133,7 +136,7 @@ export function PolicyTaskComposer() {
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [selectedId, selectedVersion && selectedVersion !== selected?.latest.version ? selectedVersion : undefined, session]);
+  }, [selectedId, selectedVersion, session]);
 
   const overrides = useMemo(() => {
     if (!selected || !form) return {};
@@ -154,11 +157,11 @@ export function PolicyTaskComposer() {
     return result;
   }, [form, selected]);
 
-  const modeProtocol = mode === "deterministic" ? "demo" : mode;
+  const modeProtocol = protocolForMode(mode);
   const effectiveProviders = form?.allowedProviders ?? [];
   const selectedProviderRecords = effectiveProviders.map((id) => providers.find((provider) => provider.id === id)).filter((provider): provider is Provider => Boolean(provider));
   const runtimeReady = selectedProviderRecords.length === effectiveProviders.length && selectedProviderRecords.every((provider) => provider.status === "active" && (provider.protocol === "demo" || provider.healthStatus === "healthy") && provider.executionModes.includes(mode));
-  const valid = Boolean(selected && form && taskName.trim() && Number(form.totalCeilingUsd) > 0 && Number(form.maxPerCallUsd) > 0 && Number(form.maxPerCallUsd) <= Number(form.totalCeilingUsd) && Number(form.durationMinutes) > 0 && effectiveProviders.length > 0 && form.allowedProtocols.includes(modeProtocol as Protocol));
+  const valid = Boolean(selected && form && taskName.trim() && Number(form.totalCeilingUsd) > 0 && Number(form.maxPerCallUsd) > 0 && Number(form.maxPerCallUsd) <= Number(form.totalCeilingUsd) && Number(form.durationMinutes) > 0 && effectiveProviders.length > 0 && form.allowedProtocols.includes(modeProtocol));
 
   function selectPolicy(value: string) { setSelectedId(value); setSelectedVersion(undefined); }
   function toggleProvider(id: string, target: "allowedProviders" | "blockedProviders") {
@@ -167,6 +170,17 @@ export function PolicyTaskComposer() {
       const other = target === "allowedProviders" ? "blockedProviders" : "allowedProviders";
       const exists = current[target].includes(id);
       return { ...current, [target]: exists ? current[target].filter((value) => value !== id) : [...current[target], id], [other]: current[other].filter((value) => value !== id) };
+    });
+  }
+  function toggleProtocol(protocol: Protocol) {
+    setForm((current) => {
+      if (!current) return current;
+      const exists = current.allowedProtocols.includes(protocol);
+      const next = exists
+        ? current.allowedProtocols.filter((value) => value !== protocol)
+        : [...current.allowedProtocols, protocol];
+      if (next.length > 0 && !next.includes(protocolForMode(mode))) setMode(modeForProtocol(next[0]));
+      return { ...current, allowedProtocols: next };
     });
   }
 
@@ -231,6 +245,7 @@ export function PolicyTaskComposer() {
           <label><span>Allowed networks</span><input value={form.allowedNetworks} onChange={(event) => setForm((current) => current && ({ ...current, allowedNetworks: event.target.value }))} placeholder="Comma separated" /></label>
           <label className={styles.wide}><span>Allowed assets / mints</span><input value={form.allowedMints} onChange={(event) => setForm((current) => current && ({ ...current, allowedMints: event.target.value }))} placeholder="USDC, mint-address" /></label>
         </div>
+        <fieldset className={styles.providers}><legend>Allowed protocols</legend><div className={styles.protocolRow}>{(["demo", "x402", "mpp"] as Protocol[]).map((protocol) => <label key={protocol}><input type="checkbox" checked={form.allowedProtocols.includes(protocol)} onChange={() => toggleProtocol(protocol)} /> {protocol.toUpperCase()}</label>)}</div></fieldset>
         <fieldset className={styles.providers}><legend>Provider policy</legend>{providers.map((provider) => <div key={provider.id}><strong>{provider.name}<small>{provider.id} · {provider.protocol.toUpperCase()}</small></strong><label><input type="checkbox" checked={form.allowedProviders.includes(provider.id)} onChange={() => toggleProvider(provider.id, "allowedProviders")} /> Allow</label><label><input type="checkbox" checked={form.blockedProviders.includes(provider.id)} onChange={() => toggleProvider(provider.id, "blockedProviders")} /> Block</label>{form.allowedProviders.includes(provider.id) ? <input aria-label={`${provider.name} spending cap`} inputMode="decimal" placeholder="Optional cap" value={form.providerCapsUsd[provider.id] ?? ""} onChange={(event) => setForm((current) => current && ({ ...current, providerCapsUsd: { ...current.providerCapsUsd, [provider.id]: event.target.value } }))} /> : null}</div>)}</fieldset>
         <div className={styles.overrideSummary}><strong>{Object.keys(overrides).length} override{Object.keys(overrides).length === 1 ? "" : "s"}</strong>{Object.keys(overrides).length ? <code>{JSON.stringify(overrides, null, 2)}</code> : <p>No overrides. This task will use policy v{selected.latest.version} exactly.</p>}</div>
       </section>
