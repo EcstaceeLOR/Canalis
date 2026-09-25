@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
 import { migrateDatabase } from "../src/migrate.js";
+import { PostgresLiveChannelRepository } from "../src/live-channels.js";
 import { PostgresSecurityRepository } from "../src/security.js";
 import { PostgresTaskWorkspaceRepository } from "../src/tasks.js";
 
@@ -11,6 +12,7 @@ dbDescribe("production hardening persistence", () => {
   let sql: Sql;
   let security: PostgresSecurityRepository;
   let tasks: PostgresTaskWorkspaceRepository;
+  let liveChannels: PostgresLiveChannelRepository;
   const stamp = Date.now();
   const owner = `security-owner-${stamp}`;
   const otherOwner = `${owner}-other`;
@@ -22,11 +24,13 @@ dbDescribe("production hardening persistence", () => {
     sql = postgres(databaseUrl!, { max: 4, prepare: false });
     security = new PostgresSecurityRepository(databaseUrl!);
     tasks = new PostgresTaskWorkspaceRepository(databaseUrl!);
+    liveChannels = new PostgresLiveChannelRepository(databaseUrl!);
   });
 
   afterAll(async () => {
     await security.close();
     await tasks.close();
+    await liveChannels.close();
     await sql.end({ timeout: 5 });
   });
 
@@ -102,6 +106,55 @@ dbDescribe("production hardening persistence", () => {
     ]);
     expect([cancelled, completed].filter(Boolean)).toHaveLength(1);
     expect(await tasks.setStatus(taskId, otherOwner, "cancelled", now + 2n, undefined, ["active", "completed"])).toBe(false);
+  });
+
+  it("prevents duplicate settlement and recovery terminal attempts", async () => {
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    await sql`
+      INSERT INTO channels (
+        task_id, provider_id, program_address, network, channel_address,
+        ceiling_atomic, cumulative_authorized_atomic, spent_atomic, status,
+        recovery_state, created_at_unix, updated_at_unix
+      ) VALUES (
+        ${taskId}, 'search', 'program', 'solana:devnet', 'security-channel',
+        1000000, 250000, 250000, 'open', '{}'::jsonb, ${now.toString()}, ${now.toString()}
+      )
+    `;
+
+    const input = {
+      taskId,
+      providerId: "search",
+      cumulativeAmountAtomic: 250000n,
+      startedAtUnixSeconds: now + 1n,
+    };
+    const [first, second] = await Promise.all([
+      liveChannels.beginFinalization(input),
+      liveChannels.beginFinalization(input),
+    ]);
+    expect([first, second].sort()).toEqual(["acquired", "busy"]);
+
+    await Promise.all([
+      liveChannels.recordSettlement({
+        taskId,
+        providerId: "search",
+        cumulativeAmountAtomic: 250000n,
+        transactionSignature: `settlement-${stamp}`,
+      }),
+      liveChannels.recordSettlement({
+        taskId,
+        providerId: "search",
+        cumulativeAmountAtomic: 250000n,
+        transactionSignature: `settlement-${stamp}`,
+      }),
+    ]);
+    const settlementRows = await sql<{ count: number }[]>`
+      SELECT COUNT(*)::int AS count FROM settlements
+      WHERE task_id = ${taskId} AND provider_id = 'search' AND transaction_signature = ${`settlement-${stamp}`}
+    `;
+    expect(settlementRows[0]?.count).toBe(1);
+
+    await sql`UPDATE channels SET status = 'recovered' WHERE task_id = ${taskId} AND provider_id = 'search'`;
+    expect(await liveChannels.beginFinalization({ ...input, startedAtUnixSeconds: now + 2n })).toBe("terminal");
   });
 
   it("writes wallet-scoped append-only audit events and redacts provider secrets", async () => {
