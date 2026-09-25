@@ -11,6 +11,7 @@ const requireFile = (path) => {
 
 const shell = read("apps/web/src/components/product/app-shell.tsx");
 const ux = read("apps/web/src/components/product/product-ux.tsx");
+const channels = read("apps/web/src/components/product/channels-workspace.tsx");
 const css = read("apps/web/src/app/production-ux.css");
 const loading = read("apps/web/src/app/(product)/loading.tsx");
 const error = read("apps/web/src/app/(product)/error.tsx");
@@ -27,12 +28,18 @@ requireText(ux, "ConfirmDialog", "UX runtime");
 requireText(ux, "role=\"alertdialog\"", "UX runtime");
 requireText(ux, "labelTables", "UX runtime");
 requireText(ux, "confirmationFor", "UX runtime");
+requireText(ux, "fieldValidationMessage", "UX runtime");
+requireText(ux, 'setAttribute("aria-invalid", "true")', "UX runtime");
 requireText(ux, 'text.startsWith("finalize")', "UX runtime");
 requireText(ux, 'text.startsWith("recover")', "UX runtime");
 requireText(ux, 'text === "archive"', "UX runtime");
 requireText(ux, 'text === "disable"', "UX runtime");
 requireText(ux, 'event.key === "Tab"', "UX runtime");
 requireText(ux, 'event.key === "Escape"', "UX runtime");
+
+requireText(channels, "networkLabel(channel.network)", "channels");
+requireText(channels, 'fetch("/api/providers"', "channels");
+if (channels.includes("● Devnet") || channels.includes("cluster=devnet`;")) failures.push("channels: hard-coded devnet presentation returned");
 
 requireText(css, "[data-ux-table]", "production UX CSS");
 requireText(css, "safe-area-inset-bottom", "production UX CSS");
