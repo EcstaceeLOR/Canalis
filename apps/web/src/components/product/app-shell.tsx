@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CanalisLogo } from "../brand/canalis-logo";
 import { useWalletIdentity, WalletAccountControl } from "../wallet/wallet-identity";
 import { NotificationCenter } from "./notification-center";
+import { ModalSurface, ProductUxRuntime } from "./product-ux";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", glyph: "⌂" },
@@ -21,9 +22,7 @@ const navigation = [
 
 const searchItems = [
   ...navigation,
-  { href: "/tasks/demo", label: "Run reference task", glyph: "▶" },
-  { href: "/channels", label: "Devnet reference proof", glyph: "◎" },
-  { href: "/transactions", label: "Settlement evidence", glyph: "✓" },
+  { href: "/tasks/new", label: "Create governed task", glyph: "＋" },
 ];
 
 type RuntimeSettings = {
@@ -38,10 +37,16 @@ function isActive(pathname: string, href: string) {
   return pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
 }
 
+function breadcrumbLabel(part: string) {
+  const decoded = decodeURIComponent(part);
+  if (decoded.length > 22) return `${decoded.slice(0, 10)}…${decoded.slice(-5)}`;
+  return decoded.charAt(0).toUpperCase() + decoded.slice(1);
+}
+
 function breadcrumbs(pathname: string) {
   const parts = pathname.split("/").filter(Boolean);
   return parts.map((part, index) => ({
-    label: part === "demo" ? "Reference task" : part.charAt(0).toUpperCase() + part.slice(1),
+    label: breadcrumbLabel(part),
     href: `/${parts.slice(0, index + 1).join("/")}`,
   }));
 }
@@ -70,10 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         event.preventDefault();
         setSearchOpen(true);
       }
-      if (event.key === "Escape") {
-        setSearchOpen(false);
-        setMenuOpen(false);
-      }
+      if (event.key === "Escape") setMenuOpen(false);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -117,7 +119,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="product-shell" data-environment={runtime.environment}>
-      <aside className={`product-sidebar ${menuOpen ? "open" : ""}`}>
+      <a className="skip-link" href="#main-content">Skip to main content</a>
+      <ProductUxRuntime />
+
+      <aside id="product-navigation" className={`product-sidebar ${menuOpen ? "open" : ""}`} aria-label="Primary product navigation">
         <div className="sidebar-brand-row">
           <Link className="sidebar-brand" href="/dashboard" aria-label="Canalis dashboard">
             <CanalisLogo />
@@ -125,19 +130,19 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button className="sidebar-close" type="button" onClick={() => setMenuOpen(false)} aria-label="Close navigation">×</button>
         </div>
 
-        <div className="environment-chip"><span />{runtime.environment} workspace · {runtime.defaultAssetSymbol}</div>
+        <div className="environment-chip"><span aria-hidden="true" />{runtime.environment} workspace · {runtime.defaultAssetSymbol}</div>
 
         <nav className="product-nav" aria-label="Product navigation">
           <p className="nav-section-label">Workspace</p>
           {navigation.slice(0, 5).map((item) => (
-            <Link className={`product-nav-link ${isActive(pathname, item.href) ? "active" : ""}`} href={item.href} key={item.href}>
+            <Link className={`product-nav-link ${isActive(pathname, item.href) ? "active" : ""}`} href={item.href} key={item.href} aria-current={isActive(pathname, item.href) ? "page" : undefined}>
               <span className="nav-glyph" aria-hidden="true">{item.glyph}</span>
               <span>{item.label}</span>
             </Link>
           ))}
           <p className="nav-section-label nav-section-spaced">Control</p>
           {navigation.slice(5).map((item) => (
-            <Link className={`product-nav-link ${isActive(pathname, item.href) ? "active" : ""}`} href={item.href} key={item.href}>
+            <Link className={`product-nav-link ${isActive(pathname, item.href) ? "active" : ""}`} href={item.href} key={item.href} aria-current={isActive(pathname, item.href) ? "page" : undefined}>
               <span className="nav-glyph" aria-hidden="true">{item.glyph}</span>
               <span>{item.label}</span>
             </Link>
@@ -145,9 +150,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="sidebar-proof-card">
-          <span className="proof-dot" />
-          <div><strong>Reference proof · devnet</strong><span>100k ceiling · 30k settled</span></div>
-          <Link href="/channels" aria-label="Open devnet reference proof">→</Link>
+          <span className="proof-dot" aria-hidden="true" />
+          <div><strong>{networkLabel(runtime)} runtime</strong><span>{runtime.defaultAssetSymbol} · {runtime.environment}</span></div>
+          <Link href="/settings" aria-label="Open runtime settings">→</Link>
         </div>
       </aside>
 
@@ -156,43 +161,61 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="product-main">
         <header className="product-topbar">
           <div className="topbar-left">
-            <button className="menu-trigger" type="button" onClick={() => setMenuOpen(true)} aria-label="Open navigation">☰</button>
-            <div className="breadcrumbs" aria-label="Breadcrumb">
+            <button
+              className="menu-trigger"
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              aria-label="Open navigation"
+              aria-expanded={menuOpen}
+              aria-controls="product-navigation"
+            >☰</button>
+            <nav className="breadcrumbs" aria-label="Breadcrumb">
               <Link href="/dashboard">Canalis</Link>
-              {crumbs.map((crumb) => <span key={crumb.href}><i>/</i><Link href={crumb.href}>{crumb.label}</Link></span>)}
-            </div>
+              {crumbs.map((crumb) => <span key={crumb.href}><i aria-hidden="true">/</i><Link href={crumb.href} aria-current={crumb.href === pathname ? "page" : undefined}>{crumb.label}</Link></span>)}
+            </nav>
           </div>
           <div className="topbar-actions">
-            <button className="command-trigger" type="button" onClick={() => setSearchOpen(true)}>
-              <span>Search workspace</span><kbd>⌘ K</kbd>
+            <button
+              className="command-trigger"
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              aria-expanded={searchOpen}
+              aria-controls="workspace-command-panel"
+            >
+              <span>Search workspace</span><kbd aria-hidden="true">⌘ K</kbd>
             </button>
             <NotificationCenter />
             <Link className="topbar-task-link" href="/tasks/new">New task</Link>
-            <Link className="network-badge" href="/settings" title={`${runtime.environment} workspace · ${runtime.solanaNetwork}`}><i />{networkLabel(runtime)}</Link>
+            <Link className="network-badge" href="/settings" title={`${runtime.environment} workspace · ${runtime.solanaNetwork}`} aria-label={`Runtime network ${networkLabel(runtime)}. Open settings.`}><i aria-hidden="true" />{networkLabel(runtime)}</Link>
             <WalletAccountControl />
           </div>
         </header>
-        <main className="product-content">{children}</main>
+        <main id="main-content" className="product-content" tabIndex={-1}>{children}</main>
       </div>
 
       <nav className="mobile-tabbar" aria-label="Mobile product navigation">
         {navigation.slice(0, 5).map((item) => (
-          <Link className={isActive(pathname, item.href) ? "active" : ""} href={item.href} key={item.href}>
-            <span>{item.glyph}</span><small>{item.label}</small>
+          <Link className={isActive(pathname, item.href) ? "active" : ""} href={item.href} key={item.href} aria-current={isActive(pathname, item.href) ? "page" : undefined}>
+            <span aria-hidden="true">{item.glyph}</span><small>{item.label}</small>
           </Link>
         ))}
       </nav>
 
       {searchOpen ? (
-        <div className="command-backdrop" role="presentation" onMouseDown={() => setSearchOpen(false)}>
-          <div className="command-panel" role="dialog" aria-modal="true" aria-label="Search workspace" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="command-input-row"><span>⌕</span><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Jump to a page, task, or proof…" aria-label="Search workspace" /><kbd>ESC</kbd></div>
+        <ModalSurface
+          onClose={() => setSearchOpen(false)}
+          backdropClassName="command-backdrop"
+          panelClassName="command-panel"
+          ariaLabel="Search workspace"
+        >
+          <div id="workspace-command-panel">
+            <div className="command-input-row"><span aria-hidden="true">⌕</span><input data-autofocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Jump to a workspace…" aria-label="Search workspace" /><kbd aria-hidden="true">ESC</kbd></div>
             <div className="command-results">
-              {filteredItems.map((item) => <Link href={item.href} key={`${item.href}-${item.label}`}><span className="command-glyph">{item.glyph}</span><span>{item.label}</span><small>Open →</small></Link>)}
-              {filteredItems.length === 0 ? <p className="command-empty">No matching destination.</p> : null}
+              {filteredItems.map((item) => <Link href={item.href} key={`${item.href}-${item.label}`}><span className="command-glyph" aria-hidden="true">{item.glyph}</span><span>{item.label}</span><small>Open →</small></Link>)}
+              {filteredItems.length === 0 ? <p className="command-empty" role="status">No matching destination.</p> : null}
             </div>
           </div>
-        </div>
+        </ModalSurface>
       ) : null}
     </div>
   );

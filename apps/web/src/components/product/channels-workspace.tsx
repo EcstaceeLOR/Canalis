@@ -28,6 +28,7 @@ type ChannelDetail = {
   recovery: { stage: string | null; required: boolean; automaticRetryBlocked: boolean; state: Record<string, unknown> | null };
   nextAction: ChannelAction;
 };
+type ProviderOption = { id: string; name: string };
 
 const emptyCounts: ChannelList["counts"] = { active: 0, reserved: 0, sealed: 0, settled: 0, recovered: 0, recoverable: 0, expired: 0, failed: 0 };
 const filters: Array<{ id: "all" | ChannelStatus; label: string }> = [
@@ -46,8 +47,27 @@ function short(value?: string, head = 7, tail = 5) {
 function time(value: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(Number(value) * 1000));
 }
-function explorerAddress(value: string) { return `https://explorer.solana.com/address/${value}?cluster=devnet`; }
-function explorerTx(value: string) { return `https://explorer.solana.com/tx/${value}?cluster=devnet`; }
+function explorerSuffix(network: string) {
+  const value = network.toLowerCase();
+  if (value.includes("devnet") || value.includes("etwtrabza")) return "?cluster=devnet";
+  if (value.includes("mainnet") || value.includes("5eykt4u")) return "";
+  return undefined;
+}
+function explorerAddress(value: string, network: string) {
+  const suffix = explorerSuffix(network);
+  return suffix === undefined ? undefined : `https://explorer.solana.com/address/${value}${suffix}`;
+}
+function explorerTx(value: string, network: string) {
+  const suffix = explorerSuffix(network);
+  return suffix === undefined ? undefined : `https://explorer.solana.com/tx/${value}${suffix}`;
+}
+function networkLabel(network: string) {
+  const value = network.toLowerCase();
+  if (value.includes("devnet") || value.includes("etwtrabza")) return "Devnet";
+  if (value.includes("mainnet") || value.includes("5eykt4u")) return "Mainnet";
+  if (value.includes("local")) return "Localnet";
+  return network;
+}
 async function responseError(response: Response) {
   try {
     const body = await response.json() as { error?: { message?: string } };
@@ -61,6 +81,7 @@ function actionLabel(action: ChannelAction) {
 export function ChannelsWorkspace() {
   const { session, status: walletStatus } = useWalletIdentity();
   const [result, setResult] = useState<ChannelList>({ channels: [], total: 0, page: 1, pageSize: 25, totalPages: 1, counts: emptyCounts });
+  const [providers, setProviders] = useState<ProviderOption[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | ChannelStatus>("all");
   const [provider, setProvider] = useState("all");
@@ -79,6 +100,14 @@ export function ChannelsWorkspace() {
     return params.toString();
   }, [page, provider, search, status]);
 
+  const loadProviders = useCallback(async () => {
+    if (!session) { setProviders([]); return; }
+    const response = await fetch("/api/providers", { credentials: "same-origin", cache: "no-store" });
+    if (!response.ok) return;
+    const body = await response.json() as { providers: ProviderOption[] };
+    setProviders(body.providers.map(({ id, name }) => ({ id, name })));
+  }, [session]);
+
   const load = useCallback(async () => {
     if (!session) {
       setResult({ channels: [], total: 0, page: 1, pageSize: 25, totalPages: 1, counts: emptyCounts });
@@ -94,6 +123,7 @@ export function ChannelsWorkspace() {
     } finally { setLoading(false); }
   }, [query, session]);
 
+  useEffect(() => { void loadProviders(); }, [loadProviders]);
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), search ? 180 : 0);
     return () => window.clearTimeout(timer);
@@ -136,7 +166,7 @@ export function ChannelsWorkspace() {
   return <div className={styles.workspace}>
     <section className={styles.metrics}>
       <Metric label="Channels" value={String(Object.values(result.counts).reduce((sum, value) => sum + value, 0))} detail="Wallet-owned records" />
-      <Metric label="Active" value={String(result.counts.active)} detail="Open on devnet" />
+      <Metric label="Active" value={String(result.counts.active)} detail="Currently open" />
       <Metric label="Terminal" value={String(terminal)} detail="Settled or recovered" />
       <Metric label="Attention" value={String(attention)} detail="Recoverable, expired, or failed" alert={attention > 0} />
     </section>
@@ -145,7 +175,7 @@ export function ChannelsWorkspace() {
       <div className={styles.toolbar}>
         <label className={styles.search}><span>⌕</span><input aria-label="Search channels" placeholder="Search channel, task, provider…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
         <select aria-label="Filter channels by provider" value={provider} onChange={(event) => setProvider(event.target.value)}>
-          <option value="all">All providers</option><option value="search">Search</option><option value="data">Data</option><option value="inference">Inference</option>
+          <option value="all">All providers</option>{providers.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
         </select>
         <button type="button" className={styles.refresh} onClick={() => void load()} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>
       </div>
@@ -165,7 +195,7 @@ export function ChannelsWorkspace() {
             <td><Link href={`/tasks/${channel.taskId}`}>{channel.taskName}</Link><small>{channel.providerName}</small></td>
             <td><Status value={channel.operationalStatus} /></td>
             <td>{atomic(channel.ceilingAtomic)}</td><td>{atomic(channel.cumulativeAuthorizedAtomic)}</td><td>{atomic(channel.recoverableAtomic)}</td>
-            <td><span className={styles.network}>● Devnet</span></td><td>{time(channel.updatedAtUnixSeconds)}</td>
+            <td><span className={styles.network}>● {networkLabel(channel.network)}</span></td><td>{time(channel.updatedAtUnixSeconds)}</td>
             <td><div className={styles.rowActions}><button type="button" onClick={() => void openChannel(channel)}>{channel.nextAction === "inspect" ? "Inspect" : "Details"}</button>{channel.nextAction === "finalize" || channel.nextAction === "recover" ? <button type="button" className={styles.primary} disabled={busyId === channel.id} onClick={() => void act(channel, channel.nextAction as "finalize" | "recover")}>{busyId === channel.id ? "Working…" : actionLabel(channel.nextAction)}</button> : null}</div></td>
           </tr>)}</tbody></table></div>
       )}
@@ -187,13 +217,14 @@ function ChannelDrawer({ detail, busy, close, act }: { detail: ChannelDetail; bu
     ["Open", channel.openTransactionSignature], ["Settle / seal", channel.settleTransactionSignature],
     ["Distribute", channel.distributionTransactionSignature], ["Refund", channel.refundTransactionSignature],
   ].filter((entry): entry is [string, string] => Boolean(entry[1]));
+  const channelExplorer = channel.channelAddress ? explorerAddress(channel.channelAddress, channel.network) : undefined;
   return <>
-    <header className={styles.drawerHead}><div><span>Payment channel</span><h2>{channel.providerId} · {short(channel.channelAddress ?? `${task.id}:${channel.providerId}`, 12, 8)}</h2><p><span className={styles.network}>● Devnet</span> {channel.status}</p></div><button type="button" onClick={close} aria-label="Close channel details">×</button></header>
+    <header className={styles.drawerHead}><div><span>Payment channel</span><h2>{channel.providerId} · {short(channel.channelAddress ?? `${task.id}:${channel.providerId}`, 12, 8)}</h2><p><span className={styles.network}>● {networkLabel(channel.network)}</span> {channel.status}</p></div><button type="button" onClick={close} aria-label="Close channel details">×</button></header>
     {detail.recovery.required ? <div className={styles.recoveryAlert}><strong>Manual reconciliation required</strong><p>Automatic rebroadcast is blocked because a prior terminal attempt may have reached Solana. Inspect the persisted retry state and Explorer evidence before any recovery intervention.</p><code>{detail.recovery.stage ?? "unknown-stage"}</code></div> : null}
-    <section className={styles.detailGrid}><div><span>Channel PDA</span><strong>{channel.channelAddress ? short(channel.channelAddress, 12, 9) : "Not opened"}</strong>{channel.channelAddress ? <a href={explorerAddress(channel.channelAddress)} target="_blank" rel="noreferrer">Explorer ↗</a> : null}</div><div><span>Payer</span><strong>{short(task.owner, 12, 9)}</strong></div><div><span>Mint</span><strong>{short(task.mint, 12, 9)}</strong></div><div><span>Expires</span><strong>{time(task.expiresAtUnixSeconds)}</strong></div></section>
+    <section className={styles.detailGrid}><div><span>Channel PDA</span><strong>{channel.channelAddress ? short(channel.channelAddress, 12, 9) : "Not opened"}</strong>{channelExplorer ? <a href={channelExplorer} target="_blank" rel="noreferrer">Explorer ↗</a> : null}</div><div><span>Payer</span><strong>{short(task.owner, 12, 9)}</strong></div><div><span>Mint</span><strong>{short(task.mint, 12, 9)}</strong></div><div><span>Expires</span><strong>{time(task.expiresAtUnixSeconds)}</strong></div></section>
     <section className={styles.accounting}><div><span>Ceiling</span><strong>{atomic(detail.accounting.ceilingAtomic)}</strong></div><b>=</b><div><span>Authorized</span><strong>{atomic(detail.accounting.authorizedAtomic)}</strong></div><b>+</b><div><span>Recoverable</span><strong>{atomic(detail.accounting.recoverableAtomic)}</strong></div><small>{detail.accounting.reconciled ? "Terminal accounting reconciled" : `${atomic(detail.accounting.remainingEscrowAtomic)} unused units remain attributable to payer recovery`}</small></section>
     <section className={styles.drawerSection}><div className={styles.sectionHead}><div><span>Voucher history</span><strong>{detail.vouchers.length} authorization{detail.vouchers.length === 1 ? "" : "s"}</strong></div></div>{detail.vouchers.length ? <div className={styles.vouchers}>{detail.vouchers.map((voucher) => <div key={voucher.id}><span>{voucher.requestId}</span><strong>{atomic(voucher.previousCumulativeAtomic)} → {atomic(voucher.nextCumulativeAtomic)}</strong><small>{voucher.responseHash ? `Receipt ${short(voucher.responseHash, 10, 7)}` : voucher.status}</small></div>)}</div> : <p className={styles.muted}>No cumulative voucher has been authorized for this channel yet.</p>}</section>
-    <section className={styles.drawerSection}><div className={styles.sectionHead}><div><span>On-chain evidence</span><strong>{signatures.length} transaction{signatures.length === 1 ? "" : "s"}</strong></div></div>{signatures.length ? <div className={styles.evidence}>{signatures.map(([label, signature]) => <a key={`${label}:${signature}`} href={explorerTx(signature)} target="_blank" rel="noreferrer"><span>{label}</span><code>{short(signature, 12, 9)}</code><b>↗</b></a>)}</div> : <p className={styles.muted}>No real transaction signature has been persisted for this channel.</p>}</section>
+    <section className={styles.drawerSection}><div className={styles.sectionHead}><div><span>On-chain evidence</span><strong>{signatures.length} transaction{signatures.length === 1 ? "" : "s"}</strong></div></div>{signatures.length ? <div className={styles.evidence}>{signatures.map(([label, signature]) => { const href = explorerTx(signature, channel.network); return href ? <a key={`${label}:${signature}`} href={href} target="_blank" rel="noreferrer"><span>{label}</span><code>{short(signature, 12, 9)}</code><b>↗</b></a> : <div key={`${label}:${signature}`}><span>{label}</span><code>{short(signature, 12, 9)}</code></div>; })}</div> : <p className={styles.muted}>No real transaction signature has been persisted for this channel.</p>}</section>
     {detail.recovery.state ? <details className={styles.retryState}><summary>Persisted recovery / retry state</summary><pre>{JSON.stringify(detail.recovery.state, null, 2)}</pre></details> : null}
     <footer className={styles.drawerFooter}><div><Link href={`/tasks/${task.id}`}>Task ↗</Link><Link href="/providers">Provider ↗</Link><Link href={`/transactions?task=${encodeURIComponent(task.id)}`}>Transactions ↗</Link></div>{detail.nextAction === "finalize" || detail.nextAction === "recover" ? <button className={styles.finalize} type="button" disabled={busy} onClick={() => void act(channel, detail.nextAction as "finalize" | "recover")}>{busy ? "Submitting terminal action…" : actionLabel(detail.nextAction)}</button> : detail.nextAction === "inspect" ? <span className={styles.blocked}>Automatic retry blocked</span> : <span className={styles.blocked}>No terminal action available</span>}</footer>
   </>;
