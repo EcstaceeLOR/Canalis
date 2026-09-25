@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { ApplicationError, type TaskDetailDto } from "@canalis/application";
-import { apiErrorResponse } from "../../../../../../../server/api";
-import { assertWalletOwnsTask, requireWalletSession } from "../../../../../../../server/auth";
-import { getCanalisApplication } from "../../../../../../../server/canalis";
+import { apiErrorResponse } from "../../../../../../server/api";
+import { assertWalletOwnsTask, requireWalletSession } from "../../../../../../server/auth";
+import { getCanalisApplication } from "../../../../../../server/canalis";
 import {
   getLiveChannelGateway,
   getLiveSettlementRepository,
   paymentRequiredFromChannel,
   requireLiveTask,
-} from "../../../../../../../server/live-channels";
+} from "../../../../../../server/live-channels";
 import type { PaymentPayload } from "@x402/core/types";
 
 function savedPayload(channel: TaskDetailDto["channels"][number]): PaymentPayload {
