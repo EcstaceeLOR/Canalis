@@ -154,7 +154,13 @@ export class DevnetX402ChannelGateway {
 
         const facilitatorSigner = await createKeyPairSignerFromBytes(this.sponsor.secretKey);
         const authorizerSigner = await createKeyPairSignerFromBytes(this.authorizer.secretKey);
-        this.facilitator.register(NETWORK, new UptoSvmFacilitatorScheme(toFacilitatorSvmSigner(facilitatorSigner, { defaultRpcUrl: this.rpcUrl }), { maxChannelLifetimeSecs: 3_600, authorizerSigner }));
+        this.facilitator.register(
+          NETWORK,
+          new UptoSvmFacilitatorScheme(
+            toFacilitatorSvmSigner(facilitatorSigner, { defaultRpcUrl: this.rpcUrl }),
+            { maxChannelLifetimeSecs: 3_600 },
+          ),
+        );
         this.serverScheme = new UptoSvmServerScheme({ receiverAuthorizerSigner: authorizerSigner, rpcUrl: this.rpcUrl });
       })().catch((error) => { this.ready = undefined; throw error; });
     }
