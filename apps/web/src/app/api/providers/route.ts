@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { parseProviderRegistryCreate, type ProviderMode } from "@canalis/application";
+import { assertIntegrationCompatible, parseProviderRegistryCreate, type ProviderMode } from "@canalis/application";
 import { apiErrorResponse, readJsonBody } from "../../../server/api";
 import { requireWalletSession } from "../../../server/auth";
+import { candidateFromCreate } from "../../../server/integrations";
 import { providerRuntimeReady } from "../../../server/provider-selection";
 import { sealProviderCredential } from "../../../server/provider-secrets";
 import { getProviderRegistryRepository } from "../../../server/providers";
+import { getSettingsRepository } from "../../../server/settings";
 
 const executionModes: ProviderMode[] = ["deterministic", "x402", "mpp"];
 
@@ -30,6 +32,9 @@ export async function POST(request: Request) {
   try {
     const identity = await requireWalletSession(request);
     const input = parseProviderRegistryCreate(await readJsonBody(request));
+    const settings = await (await getSettingsRepository()).get(identity.walletAddress);
+    assertIntegrationCompatible(settings, candidateFromCreate(input));
+
     const repository = await getProviderRegistryRepository();
     const credential = input.credential
       ? {

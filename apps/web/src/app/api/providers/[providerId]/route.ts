@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import {
   ApplicationError,
+  assertIntegrationCompatible,
   parseProviderRegistryUpdate,
   type ProviderRegistryStatus,
 } from "@canalis/application";
 import { apiErrorResponse, readJsonBody } from "../../../../server/api";
 import { requireWalletSession } from "../../../../server/auth";
-import { sealProviderCredential } from "../../../../server/provider-secrets";
+import { candidateFromUpdate } from "../../../../server/integrations";
+import { verifyProviderHealth } from "../../../../server/provider-health";
+import { openProviderCredential, sealProviderCredential } from "../../../../server/provider-secrets";
 import { getProviderRegistryRepository } from "../../../../server/providers";
+import { getSettingsRepository } from "../../../../server/settings";
 
 export async function GET(
   request: Request,
@@ -46,6 +50,32 @@ export async function PATCH(
       if (status !== "active" && status !== "disabled") {
         throw new ApplicationError("VALIDATION_ERROR", "Provider status must be active or disabled.", 400);
       }
+      if (status === "active") {
+        const current = await repository.getProvider(providerId, identity.walletAddress);
+        if (!current || current.systemManaged) {
+          throw new ApplicationError("PROVIDER_NOT_FOUND", "Provider not found or is system-managed.", 404);
+        }
+        const settings = await (await getSettingsRepository()).get(identity.walletAddress);
+        assertIntegrationCompatible(settings, current);
+        const stored = await repository.getSecretEnvelope(providerId, identity.walletAddress);
+        const credential = stored
+          ? {
+              kind: stored.kind,
+              secret: openProviderCredential(stored.envelope),
+              ...(stored.headerName ? { headerName: stored.headerName } : {}),
+            }
+          : undefined;
+        const health = await verifyProviderHealth(current, credential);
+        await repository.recordHealth(providerId, identity.walletAddress, health);
+        if (health.status !== "healthy") {
+          throw new ApplicationError(
+            "INTEGRATION_CONNECTION_FAILED",
+            `Integration remains disabled because its connection test failed: ${health.message}`,
+            409,
+            { health },
+          );
+        }
+      }
       const provider = await repository.setStatus(
         providerId,
         identity.walletAddress,
@@ -68,10 +98,9 @@ export async function PATCH(
     const networks = input.supportedNetworks ?? current.supportedNetworks;
     const assets = input.supportedAssets ?? current.supportedAssets;
     const pricingModel = input.pricingModel ?? current.pricingModel;
-    const hasFixedPrice =
-      input.fixedPriceUsd === undefined
-        ? Boolean(current.fixedPriceAtomic)
-        : input.fixedPriceUsd !== null;
+    const hasFixedPrice = input.fixedPriceUsd === undefined
+      ? Boolean(current.fixedPriceAtomic)
+      : input.fixedPriceUsd !== null;
 
     if (current.protocol !== "demo" && !endpoint) {
       throw new ApplicationError(
@@ -101,6 +130,9 @@ export async function PATCH(
         400,
       );
     }
+
+    const settings = await (await getSettingsRepository()).get(identity.walletAddress);
+    assertIntegrationCompatible(settings, candidateFromUpdate(current, input));
 
     const credentialMutation = input.credential
       ? {

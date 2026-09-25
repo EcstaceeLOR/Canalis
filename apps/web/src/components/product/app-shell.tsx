@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CanalisLogo } from "../brand/canalis-logo";
-import { WalletAccountControl } from "../wallet/wallet-identity";
+import { useWalletIdentity, WalletAccountControl } from "../wallet/wallet-identity";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", glyph: "⌂" },
@@ -20,9 +20,17 @@ const navigation = [
 const searchItems = [
   ...navigation,
   { href: "/tasks/demo", label: "Run reference task", glyph: "▶" },
-  { href: "/channels", label: "Devnet channel proof", glyph: "◎" },
+  { href: "/channels", label: "Devnet reference proof", glyph: "◎" },
   { href: "/transactions", label: "Settlement evidence", glyph: "✓" },
 ];
+
+type RuntimeSettings = {
+  environment: "local" | "devnet" | "mainnet";
+  solanaNetwork: "localnet" | "devnet" | "mainnet-beta";
+  defaultAssetSymbol: string;
+};
+
+const defaultRuntime: RuntimeSettings = { environment: "devnet", solanaNetwork: "devnet", defaultAssetSymbol: "USDC" };
 
 function isActive(pathname: string, href: string) {
   return pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
@@ -36,11 +44,17 @@ function breadcrumbs(pathname: string) {
   }));
 }
 
+function networkLabel(runtime: RuntimeSettings) {
+  return runtime.solanaNetwork === "mainnet-beta" ? "MAINNET" : runtime.solanaNetwork.toUpperCase();
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { session } = useWalletIdentity();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [runtime, setRuntime] = useState<RuntimeSettings>(defaultRuntime);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -63,6 +77,34 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRuntime() {
+      if (!session) {
+        setRuntime(defaultRuntime);
+        return;
+      }
+      try {
+        const response = await fetch("/api/settings", { credentials: "same-origin", cache: "no-store" });
+        if (!response.ok) return;
+        const body = await response.json() as { settings: RuntimeSettings };
+        if (!cancelled) setRuntime(body.settings);
+      } catch {
+        // Keep the safe devnet display fallback if settings cannot be loaded.
+      }
+    }
+    function onSettings(event: Event) {
+      const detail = (event as CustomEvent<RuntimeSettings>).detail;
+      if (detail?.environment && detail?.solanaNetwork) setRuntime(detail);
+    }
+    void loadRuntime();
+    window.addEventListener("canalis:settings-updated", onSettings);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("canalis:settings-updated", onSettings);
+    };
+  }, [session]);
+
   const filteredItems = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return searchItems;
@@ -72,7 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const crumbs = breadcrumbs(pathname);
 
   return (
-    <div className="product-shell">
+    <div className="product-shell" data-environment={runtime.environment}>
       <aside className={`product-sidebar ${menuOpen ? "open" : ""}`}>
         <div className="sidebar-brand-row">
           <Link className="sidebar-brand" href="/dashboard" aria-label="Canalis dashboard">
@@ -81,7 +123,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button className="sidebar-close" type="button" onClick={() => setMenuOpen(false)} aria-label="Close navigation">×</button>
         </div>
 
-        <div className="environment-chip"><span />Devnet workspace</div>
+        <div className="environment-chip"><span />{runtime.environment} workspace · {runtime.defaultAssetSymbol}</div>
 
         <nav className="product-nav" aria-label="Product navigation">
           <p className="nav-section-label">Workspace</p>
@@ -102,8 +144,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="sidebar-proof-card">
           <span className="proof-dot" />
-          <div><strong>Devnet proof verified</strong><span>100k ceiling · 30k settled</span></div>
-          <Link href="/channels" aria-label="Open devnet proof">→</Link>
+          <div><strong>Reference proof · devnet</strong><span>100k ceiling · 30k settled</span></div>
+          <Link href="/channels" aria-label="Open devnet reference proof">→</Link>
         </div>
       </aside>
 
@@ -122,8 +164,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             <button className="command-trigger" type="button" onClick={() => setSearchOpen(true)}>
               <span>Search workspace</span><kbd>⌘ K</kbd>
             </button>
-            <Link className="topbar-task-link" href="/tasks/demo">Run task</Link>
-            <span className="network-badge"><i />DEVNET</span>
+            <Link className="topbar-task-link" href="/tasks/new">New task</Link>
+            <Link className="network-badge" href="/settings" title={`${runtime.environment} workspace · ${runtime.solanaNetwork}`}><i />{networkLabel(runtime)}</Link>
             <WalletAccountControl />
           </div>
         </header>

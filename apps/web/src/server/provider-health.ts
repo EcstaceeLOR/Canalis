@@ -2,11 +2,13 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import {
   ApplicationError,
+  networkMatches,
   type JsonObject,
   type ProviderHealthResult,
   type ProviderRegistryRecord,
 } from "@canalis/application";
 import { parseMppChallengeHeader } from "@canalis/providers";
+import { CANALIS_DEVNET_SANDBOX_MINT } from "@canalis/solana";
 
 export type ProviderHealthCredential = {
   kind: "bearer" | "api-key";
@@ -138,17 +140,30 @@ function parseX402Challenge(response: Response): JsonObject {
   }
 }
 
+function sameNetwork(configured: string, advertised: string): boolean {
+  if (configured === advertised) return true;
+  if (networkMatches("devnet", advertised)) return networkMatches("devnet", configured);
+  if (networkMatches("mainnet-beta", advertised)) return networkMatches("mainnet-beta", configured);
+  if (networkMatches("localnet", advertised)) return networkMatches("localnet", configured);
+  return false;
+}
+
+function sameAsset(configured: string, advertised: string): boolean {
+  if (configured === advertised || configured.toUpperCase() === advertised.toUpperCase()) return true;
+  return configured.toUpperCase() === "USDC" && advertised === CANALIS_DEVNET_SANDBOX_MINT;
+}
+
 function assertConstraints(provider: ProviderRegistryRecord, metadata: JsonObject): void {
   const network = typeof metadata.network === "string" ? metadata.network : undefined;
   const asset = typeof metadata.asset === "string" ? metadata.asset : undefined;
-  if (network && provider.supportedNetworks.length > 0 && !provider.supportedNetworks.includes(network)) {
+  if (network && provider.supportedNetworks.length > 0 && !provider.supportedNetworks.some((value) => sameNetwork(value, network))) {
     throw new ApplicationError(
       "PROVIDER_NETWORK_MISMATCH",
       `Endpoint advertises network ${network}, which is not in this provider's supported network list.`,
       409,
     );
   }
-  if (asset && provider.supportedAssets.length > 0 && !provider.supportedAssets.includes(asset)) {
+  if (asset && provider.supportedAssets.length > 0 && !provider.supportedAssets.some((value) => sameAsset(value, asset))) {
     throw new ApplicationError(
       "PROVIDER_ASSET_MISMATCH",
       `Endpoint advertises asset ${asset}, which is not in this provider's supported asset list.`,
