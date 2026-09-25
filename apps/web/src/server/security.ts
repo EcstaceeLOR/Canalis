@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { ApplicationError } from "@canalis/application";
 import { PostgresSecurityRepository } from "@canalis/persistence";
 import { NextResponse } from "next/server";
@@ -107,7 +107,7 @@ async function requestFingerprint(request: Request, operation: string, resourceK
   };
 }
 
-function idempotencyKey(request: Request, requestHash: string): string {
+function idempotencyKey(request: Request): string {
   const explicit = request.headers.get("idempotency-key")?.trim();
   if (explicit) {
     if (!EXPLICIT_KEY_PATTERN.test(explicit)) {
@@ -120,11 +120,12 @@ function idempotencyKey(request: Request, requestHash: string): string {
     return explicit;
   }
 
-  // Existing first-party clients remain safe even before they explicitly send a
-  // key: identical mutations collapse inside a five-minute retry window. API/SDK
-  // clients should send an explicit key when they need a longer retry horizon.
-  const fiveMinuteBucket = Math.floor(Date.now() / 300_000);
-  return `auto_${sha256(`${requestHash}:${fiveMinuteBucket}`).slice(0, 40)}`;
+  // Only a caller can know that a later HTTP request is a retry of an earlier
+  // intent. Without an explicit Idempotency-Key, give this request a unique
+  // reservation instead of guessing from its body and accidentally replaying a
+  // deliberate repeated action. Resource locks still serialize concurrent
+  // mutations; API/SDK clients should reuse an explicit key for retry replay.
+  return `auto_${randomUUID()}`;
 }
 
 async function responseSnapshot(response: Response): Promise<{ status: number; body: string; contentType: string }> {
@@ -145,7 +146,7 @@ export async function runIdempotentMutation(input: {
 }): Promise<Response> {
   const store = await securityRepository();
   const fingerprint = await requestFingerprint(input.request, input.operation, input.resourceKey);
-  const key = idempotencyKey(input.request, fingerprint.hash);
+  const key = idempotencyKey(input.request);
   const ttlSeconds = boundedEnv("CANALIS_IDEMPOTENCY_TTL_SECONDS", 86_400, 300, 172_800);
   const identity = {
     ownerWallet: input.ownerWallet,
