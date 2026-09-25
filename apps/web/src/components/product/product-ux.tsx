@@ -18,6 +18,8 @@ const FOCUSABLE = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
+type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+
 function focusableElements(root: HTMLElement) {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((element) => {
     const style = window.getComputedStyle(element);
@@ -206,7 +208,7 @@ function normalizedButtonText(button: HTMLButtonElement) {
 
 function confirmationFor(pathname: string, button: HTMLButtonElement): Confirmation | null {
   const text = normalizedButtonText(button);
-  if (button.disabled || button.dataset.uxConfirmBypass === "true") return null;
+  if (button.disabled || button.dataset.uxConfirmBypass === "true" || button.closest('[data-ux-managed="true"]')) return null;
 
   if (pathname.startsWith("/tasks") && text === "cancel") {
     return {
@@ -262,8 +264,9 @@ function confirmationFor(pathname: string, button: HTMLButtonElement): Confirmat
 function labelTables(root: ParentNode = document) {
   root.querySelectorAll<HTMLTableElement>("#main-content table").forEach((table) => {
     table.dataset.uxTable = "true";
-    const headers = Array.from(table.querySelectorAll<HTMLTableCellElement>("thead th")).map((header, index) =>
-      header.textContent?.trim() || (index === table.querySelectorAll("thead th").length - 1 ? "Actions" : `Column ${index + 1}`),
+    const headerNodes = table.querySelectorAll<HTMLTableCellElement>("thead th");
+    const headers = Array.from(headerNodes).map((header, index) =>
+      header.textContent?.trim() || (index === headerNodes.length - 1 ? "Actions" : `Column ${index + 1}`),
     );
     table.querySelectorAll<HTMLTableRowElement>("tbody tr").forEach((row) => {
       Array.from(row.children).forEach((cell, index) => {
@@ -295,9 +298,83 @@ function normalizeControls(root: ParentNode = document) {
   });
 }
 
-function focusLegacyDialog(dialog: HTMLElement) {
+function fieldLabel(control: FormControl) {
+  const label = control.closest("label");
+  if (!label) return "";
+  const direct = label.querySelector<HTMLElement>(":scope > span");
+  return (direct?.textContent ?? label.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function fieldValidationMessage(control: FormControl) {
+  if (control.disabled || (control instanceof HTMLInputElement && control.readOnly)) return null;
+  const label = fieldLabel(control);
+  const value = control.value.trim();
+  const positiveAmount = /(budget|max per call|maximum per call|total task ceiling|fixed price|channel ceiling|duration)/.test(label);
+
+  if ((label === "name" || label.startsWith("name ")) && value.length < 2) return "Enter at least 2 characters.";
+  if (label.startsWith("provider id") && value.length < 2) return "Enter a stable provider ID with at least 2 characters.";
+  if (label.startsWith("payee") && !value) return "Enter the provider wallet or recipient.";
+  if (label.startsWith("default asset symbol") && !value) return "Enter the workspace asset symbol.";
+  if (label.startsWith("default asset mint") && document.querySelector(".product-shell")?.getAttribute("data-environment") === "mainnet" && !value) {
+    return "A specific asset mint is required for a mainnet workspace.";
+  }
+  if (label.startsWith("endpoint") && !label.includes("optional")) {
+    if (!value) return "Enter the provider endpoint.";
+    try {
+      const url = new URL(value);
+      if (!['http:', 'https:'].includes(url.protocol)) return "Use an HTTP or HTTPS endpoint.";
+      if (document.querySelector(".product-shell")?.getAttribute("data-environment") === "mainnet" && url.protocol !== "https:") {
+        return "Mainnet provider endpoints must use HTTPS.";
+      }
+    } catch {
+      return "Enter a valid absolute endpoint URL.";
+    }
+  }
+  if (label.startsWith("credential header") && !value) return "Enter the HTTP header used for this API key.";
+  if (positiveAmount) {
+    const numeric = Number(value);
+    if (!value || !Number.isFinite(numeric) || numeric <= 0) return "Enter a value greater than 0.";
+  }
+  return null;
+}
+
+function validateControl(control: FormControl) {
+  const message = fieldValidationMessage(control);
+  const existing = control.parentElement?.querySelector<HTMLElement>(":scope > [data-ux-validation]") ?? null;
+  if (!message) {
+    control.removeAttribute("aria-invalid");
+    if (existing) {
+      const id = existing.id;
+      existing.remove();
+      const describedBy = (control.getAttribute("aria-describedby") ?? "").split(/\s+/).filter((value) => value && value !== id);
+      if (describedBy.length) control.setAttribute("aria-describedby", describedBy.join(" "));
+      else control.removeAttribute("aria-describedby");
+    }
+    return;
+  }
+
+  control.setAttribute("aria-invalid", "true");
+  const controlId = control.id || `ux-field-${Math.random().toString(36).slice(2, 10)}`;
+  if (!control.id) control.id = controlId;
+  const messageId = `${controlId}-error`;
+  let messageNode = existing;
+  if (!messageNode) {
+    messageNode = document.createElement("small");
+    messageNode.dataset.uxValidation = "true";
+    messageNode.className = "ux-field-message ux-field-error";
+    control.insertAdjacentElement("afterend", messageNode);
+  }
+  messageNode.id = messageId;
+  messageNode.textContent = message;
+  const describedBy = new Set((control.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean));
+  describedBy.add(messageId);
+  control.setAttribute("aria-describedby", [...describedBy].join(" "));
+}
+
+function focusLegacyDialog(dialog: HTMLElement, previous: WeakMap<HTMLElement, HTMLElement | null>) {
   if (dialog.dataset.uxManaged === "true" || dialog.dataset.uxRuntimeFocused === "true") return;
   dialog.dataset.uxRuntimeFocused = "true";
+  previous.set(dialog, document.activeElement instanceof HTMLElement ? document.activeElement : null);
   if (!dialog.hasAttribute("tabindex")) dialog.tabIndex = -1;
   const preferred = dialog.querySelector<HTMLElement>("[autofocus], [data-autofocus]");
   const first = preferred ?? focusableElements(dialog)[0] ?? dialog;
@@ -308,6 +385,8 @@ export function ProductUxRuntime() {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const pendingButton = useRef<HTMLButtonElement | null>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
+  const legacyFocus = useRef(new WeakMap<HTMLElement, HTMLElement | null>());
+  const touched = useRef(new WeakSet<FormControl>());
 
   useEffect(() => {
     labelTables();
@@ -319,8 +398,19 @@ export function ProductUxRuntime() {
           if (!(node instanceof HTMLElement)) return;
           labelTables(node);
           normalizeControls(node);
-          if (node.matches('[role="dialog"][aria-modal="true"]')) focusLegacyDialog(node);
-          node.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]').forEach(focusLegacyDialog);
+          if (node.matches('[role="dialog"][aria-modal="true"]')) focusLegacyDialog(node, legacyFocus.current);
+          node.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]').forEach((dialog) => focusLegacyDialog(dialog, legacyFocus.current));
+        });
+        mutation.removedNodes.forEach((node) => {
+          if (!(node instanceof HTMLElement)) return;
+          const dialogs = [
+            ...(node.matches('[role="dialog"][aria-modal="true"]') ? [node] : []),
+            ...Array.from(node.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]')),
+          ];
+          dialogs.forEach((dialog) => {
+            const previous = legacyFocus.current.get(dialog);
+            if (previous?.isConnected) window.requestAnimationFrame(() => previous.focus());
+          });
         });
       }
       labelTables();
@@ -379,12 +469,33 @@ export function ProductUxRuntime() {
       }
     }
 
+    function onFocusOut(event: FocusEvent) {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
+      if (!target.closest("#main-content")) return;
+      touched.current.add(target);
+      validateControl(target);
+    }
+
+    function onFieldChange(event: Event) {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
+      if (!target.closest("#main-content") || !touched.current.has(target)) return;
+      validateControl(target);
+    }
+
     document.addEventListener("click", onClick, true);
     document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("focusout", onFocusOut, true);
+    document.addEventListener("input", onFieldChange, true);
+    document.addEventListener("change", onFieldChange, true);
     return () => {
       observer.disconnect();
       document.removeEventListener("click", onClick, true);
       document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("focusout", onFocusOut, true);
+      document.removeEventListener("input", onFieldChange, true);
+      document.removeEventListener("change", onFieldChange, true);
     };
   }, []);
 
