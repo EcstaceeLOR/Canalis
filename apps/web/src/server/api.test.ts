@@ -12,7 +12,7 @@ describe("API production boundary", () => {
     expect(() => assertRequestOrigin(new Request("https://canalis.example/api/tasks", {
       method: "POST",
       headers: { origin: "https://attacker.example" },
-    }))).toThrowError(expect.objectContaining({ code: "ORIGIN_NOT_ALLOWED", status: 403 }));
+    }))).toThrow("Cross-origin mutation requests are not allowed.");
   });
 
   it("centralizes JSON media-type, size, and syntax validation", async () => {
