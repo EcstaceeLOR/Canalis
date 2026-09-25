@@ -14,6 +14,9 @@ function stringArray(value: unknown): string[] {
 function summary(row: Record<string, unknown>): TaskWorkspaceSummary {
   const budgetAtomic = BigInt(String(row.budget_atomic));
   const spentAtomic = BigInt(String(row.spent_atomic ?? 0));
+  const overrides = row.overrides && typeof row.overrides === "object" && !Array.isArray(row.overrides)
+    ? row.overrides as Record<string, unknown>
+    : {};
   return {
     id: String(row.id),
     name: String(row.name ?? row.agent_id),
@@ -27,7 +30,10 @@ function summary(row: Record<string, unknown>): TaskWorkspaceSummary {
     spentAtomic: spentAtomic.toString(),
     recoverableAtomic: (budgetAtomic - spentAtomic).toString(),
     allowedProviders: stringArray(row.allowed_provider_ids),
-    policyId: String(row.policy_id ?? "inline-bounded"),
+    policyId: String(row.policy_definition_id ?? row.policy_id ?? "inline-bounded"),
+    ...(row.policy_version !== null && row.policy_version !== undefined ? { policyVersion: Number(row.policy_version) } : {}),
+    ...(row.policy_name ? { policyName: String(row.policy_name) } : {}),
+    hasPolicyOverrides: Object.keys(overrides).length > 0,
     createdAtUnixSeconds: String(row.created_at_unix),
     expiresAtUnixSeconds: String(row.expires_at_unix),
     updatedAtUnixSeconds: String(row.updated_at_unix),
@@ -91,12 +97,8 @@ export class PostgresTaskWorkspaceRepository {
       const placeholder = add(query.providerId);
       clauses.push(`EXISTS (SELECT 1 FROM channels cf WHERE cf.task_id = t.id AND cf.provider_id = ${placeholder})`);
     }
-    if (query.createdFromUnixSeconds !== undefined) {
-      clauses.push(`t.created_at_unix >= ${add(query.createdFromUnixSeconds.toString())}`);
-    }
-    if (query.createdToUnixSeconds !== undefined) {
-      clauses.push(`t.created_at_unix <= ${add(query.createdToUnixSeconds.toString())}`);
-    }
+    if (query.createdFromUnixSeconds !== undefined) clauses.push(`t.created_at_unix >= ${add(query.createdFromUnixSeconds.toString())}`);
+    if (query.createdToUnixSeconds !== undefined) clauses.push(`t.created_at_unix <= ${add(query.createdToUnixSeconds.toString())}`);
 
     const where = clauses.join(" AND ");
     const sort = query.sort === "created_desc"
@@ -108,10 +110,7 @@ export class PostgresTaskWorkspaceRepository {
           : "t.updated_at_unix DESC";
 
     const countRows = await this.sql.unsafe<Record<string, unknown>[]>(
-      `SELECT COUNT(*)::int AS total
-       FROM tasks t
-       LEFT JOIN task_workspace_metadata m ON m.task_id = t.id
-       WHERE ${where}`,
+      `SELECT COUNT(*)::int AS total FROM tasks t LEFT JOIN task_workspace_metadata m ON m.task_id = t.id WHERE ${where}`,
       params,
     );
     const total = Number(countRows[0]?.total ?? 0);
@@ -120,7 +119,7 @@ export class PostgresTaskWorkspaceRepository {
     const limitPlaceholder = `$${selectParams.length - 1}`;
     const offsetPlaceholder = `$${selectParams.length}`;
     const rows = await this.sql.unsafe<Record<string, unknown>[]>(
-      `SELECT t.*, p.allowed_provider_ids,
+      `SELECT t.*, p.allowed_provider_ids, p.policy_definition_id, p.policy_version, p.policy_name, p.overrides,
               COALESCE(m.name, t.agent_id) AS name,
               COALESCE(m.description, '') AS description,
               COALESCE(m.policy_id, 'inline-bounded') AS policy_id,
@@ -145,7 +144,7 @@ export class PostgresTaskWorkspaceRepository {
 
   async getSummary(taskId: string, owner: string): Promise<TaskWorkspaceSummary | null> {
     const rows = await this.sql<Record<string, unknown>[]>`
-      SELECT t.*, p.allowed_provider_ids,
+      SELECT t.*, p.allowed_provider_ids, p.policy_definition_id, p.policy_version, p.policy_name, p.overrides,
              COALESCE(m.name, t.agent_id) AS name,
              COALESCE(m.description, '') AS description,
              COALESCE(m.policy_id, 'inline-bounded') AS policy_id,
