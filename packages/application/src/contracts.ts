@@ -37,7 +37,7 @@ export const createTaskRequestSchema = z
     providerCapsUsd: z.record(providerIdSchema, moneySchema).default({}),
     allowedNetworks: z.array(z.string().trim().min(1).max(160)).max(12).default([]),
     allowedMints: z.array(z.string().trim().min(1).max(160)).max(12).default([]),
-    allowedProtocols: z.array(z.enum(["demo", "x402", "mpp"])).min(1).max(3).default(["demo"]),
+    allowedProtocols: z.array(z.enum(["demo", "x402", "mpp"])).min(1).max(3).default(["demo", "x402", "mpp"]),
     policySourceId: z.string().trim().min(1).max(100).optional(),
     policySourceVersion: z.coerce.number().int().min(1).optional(),
     policySourceName: z.string().trim().min(1).max(120).default("Inline bounded policy"),
