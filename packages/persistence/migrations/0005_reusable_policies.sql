@@ -47,9 +47,12 @@ SET policy_name = COALESCE(policy_name, 'Inline bounded policy'),
 FROM tasks t
 WHERE p.task_id = t.id;
 
+-- Keep total_ceiling_atomic nullable for legacy/imported task-policy rows that
+-- predate reusable-policy snapshots. The canonical task budget remains in
+-- tasks.budget_atomic, while all new Canalis task creation paths persist the
+-- resolved snapshot value explicitly.
 ALTER TABLE policies
-  ALTER COLUMN policy_name SET DEFAULT 'Inline bounded policy',
-  ALTER COLUMN total_ceiling_atomic SET NOT NULL;
+  ALTER COLUMN policy_name SET DEFAULT 'Inline bounded policy';
 
 CREATE INDEX IF NOT EXISTS idx_reusable_policy_owner_status
   ON reusable_policy_definitions(owner_wallet, status, updated_at DESC);
