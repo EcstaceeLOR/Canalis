@@ -92,7 +92,7 @@ export function LiveChannelPanel({ taskId }: { taskId: string }) {
       const response = await fetch(`/api/tasks/${taskId}/live/finalize`, { method: "POST", credentials: "same-origin" });
       if (!response.ok) throw new Error(await responseMessage(response));
       const result = (await response.json()) as { partial?: boolean };
-      setNotice(result.partial ? "Some channels need recovery. Safe retry state has been persisted." : "All provider channels finalized and unused budget returned on-chain.");
+      setNotice(result.partial ? "Some channels require reconciliation. Automatic terminal rebroadcast is blocked until their persisted state is reviewed." : "All provider channels finalized and unused budget returned on-chain.");
       await load();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not finalize live channels." ); }
     finally { setBusy(""); }
@@ -126,7 +126,7 @@ export function LiveChannelPanel({ taskId }: { taskId: string }) {
               {channelUrl ? <a href={channelUrl} target="_blank" rel="noreferrer">Channel account ↗</a> : <span>Channel account pending</span>}
               {openUrl ? <a href={openUrl} target="_blank" rel="noreferrer">Open transaction ↗</a> : null}
               {terminalUrl ? <a href={terminalUrl} target="_blank" rel="noreferrer">Finalization transaction ↗</a> : null}
-              {channel.status === "failed" ? <span>Recovery state: {String(channel.recoveryState?.error ?? "safe retry available")}</span> : null}
+              {channel.status === "failed" ? <span>Recovery state: {String(channel.recoveryState?.error ?? "reconciliation required; automatic rebroadcast blocked")}</span> : null}
             </div>
           </article>;
         })}
