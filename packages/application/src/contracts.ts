@@ -32,11 +32,16 @@ export const createTaskRequestSchema = z
     agentId: z.string().trim().min(1).max(128).default("canalis-research-agent"),
     budgetUsd: moneySchema.default("1.00"),
     maxPerCallUsd: moneySchema.default("0.25"),
-    allowedProviders: z
-      .array(providerIdSchema)
-      .min(1)
-      .max(12)
-      .default([...deterministicProviderIds]),
+    allowedProviders: z.array(providerIdSchema).min(1).max(24).default([...deterministicProviderIds]),
+    blockedProviders: z.array(providerIdSchema).max(24).default([]),
+    providerCapsUsd: z.record(providerIdSchema, moneySchema).default({}),
+    allowedNetworks: z.array(z.string().trim().min(1).max(160)).max(12).default([]),
+    allowedMints: z.array(z.string().trim().min(1).max(160)).max(12).default([]),
+    allowedProtocols: z.array(z.enum(["demo", "x402", "mpp"])).min(1).max(3).default(["demo"]),
+    policySourceId: z.string().trim().min(1).max(100).optional(),
+    policySourceVersion: z.coerce.number().int().min(1).optional(),
+    policySourceName: z.string().trim().min(1).max(120).default("Inline bounded policy"),
+    policyOverrides: z.record(z.unknown()).default({}),
     mode: z.enum(["deterministic", "x402", "mpp"]).default("deterministic"),
     initialStatus: z.enum(["draft", "active"]).default("active"),
     expiryMinutes: z.coerce.number().int().min(1).max(10_080).default(15),
@@ -58,15 +63,15 @@ export function parseCreateTaskRequest(input: unknown): ParsedCreateTaskRequest 
   }
 
   const allowedProviders = [...new Set(parsed.data.allowedProviders)];
+  const blockedProviders = [...new Set(parsed.data.blockedProviders)];
   if (allowedProviders.length === 0) {
-    throw new ApplicationError(
-      "VALIDATION_ERROR",
-      "Select at least one provider.",
-      400,
-    );
+    throw new ApplicationError("VALIDATION_ERROR", "Select at least one provider.", 400);
   }
-
-  return { ...parsed.data, allowedProviders };
+  const conflict = allowedProviders.find((providerId) => blockedProviders.includes(providerId));
+  if (conflict) {
+    throw new ApplicationError("VALIDATION_ERROR", `Provider ${conflict} cannot be both allowed and blocked.`, 400);
+  }
+  return { ...parsed.data, allowedProviders, blockedProviders };
 }
 
 export function parseUsdc(value: string): bigint {
@@ -117,7 +122,16 @@ export type TaskDetailDto = {
     mint: string;
     budgetAtomic: string;
     allowedProviders: readonly string[];
+    blockedProviders: readonly string[];
     maxPerCallAtomic?: string;
+    providerCapsAtomic: Record<string, string>;
+    allowedNetworks: readonly string[];
+    allowedMints: readonly string[];
+    allowedProtocols: readonly string[];
+    policySourceId?: string;
+    policySourceVersion?: number;
+    policySourceName?: string;
+    policyOverrides: JsonObject;
     createdAtUnixSeconds: string;
     expiresAtUnixSeconds: string;
   };
