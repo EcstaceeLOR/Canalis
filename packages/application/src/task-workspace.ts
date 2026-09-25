@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { TaskStatus } from "@canalis/core";
 import { deterministicProviderIds, providerIdSchema } from "./contracts.js";
 import { ApplicationError } from "./errors.js";
+import { taskPolicyOverrideSchema, type TaskPolicyOverrides } from "./policy-workspace.js";
 
 const money = z
   .string()
@@ -15,12 +16,10 @@ export const taskWorkspaceCreateSchema = z.object({
   budgetUsd: money.default("1.00"),
   maxPerCallUsd: money.default("0.25"),
   expiryMinutes: z.coerce.number().int().min(1).max(10_080).default(60),
-  allowedProviders: z
-    .array(providerIdSchema)
-    .min(1)
-    .max(12)
-    .default([...deterministicProviderIds]),
-  policyId: z.string().trim().min(1).max(80).default("inline-bounded"),
+  allowedProviders: z.array(providerIdSchema).min(1).max(24).default([...deterministicProviderIds]),
+  policyId: z.string().trim().min(1).max(100).default("inline-bounded"),
+  policyVersion: z.coerce.number().int().min(1).optional(),
+  policyOverrides: taskPolicyOverrideSchema.default({}),
   mode: z.enum(["deterministic", "x402", "mpp"]).default("deterministic"),
   saveAsDraft: z.boolean().default(false),
 }).strict();
@@ -37,7 +36,11 @@ export function parseTaskWorkspaceCreate(input: unknown): TaskWorkspaceCreateInp
       parsed.error.flatten(),
     );
   }
-  return { ...parsed.data, allowedProviders: [...new Set(parsed.data.allowedProviders)] };
+  return {
+    ...parsed.data,
+    allowedProviders: [...new Set(parsed.data.allowedProviders)],
+    policyOverrides: parsed.data.policyOverrides as TaskPolicyOverrides,
+  };
 }
 
 export const taskStatuses = ["draft", "active", "completed", "cancelled", "archived"] as const;
@@ -69,6 +72,9 @@ export type TaskWorkspaceSummary = {
   recoverableAtomic: string;
   allowedProviders: string[];
   policyId: string;
+  policyVersion?: number;
+  policyName?: string;
+  hasPolicyOverrides: boolean;
   createdAtUnixSeconds: string;
   expiresAtUnixSeconds: string;
   updatedAtUnixSeconds: string;
