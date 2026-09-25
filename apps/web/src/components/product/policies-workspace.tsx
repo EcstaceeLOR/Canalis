@@ -181,7 +181,8 @@ export function PoliciesWorkspace() {
     try {
       const response = await fetch(`/api/policies/${policy.id}/versions`, { credentials: "same-origin", cache: "no-store" });
       if (!response.ok) throw new Error(await responseError(response));
-      setVersions((current) => ({ ...current, [policy.id]: ((await response.json()) as { versions: PolicyVersion[] }).versions }));
+      const body = (await response.json()) as { versions: PolicyVersion[] };
+      setVersions((current) => ({ ...current, [policy.id]: body.versions }));
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not load version history."); }
     finally { setBusy(""); }
   }
@@ -226,7 +227,7 @@ export function PoliciesWorkspace() {
           <button disabled={Boolean(busy)} onClick={() => void lifecycle(policy, "duplicate")}>Duplicate</button>
           {policy.status === "active" ? <button className={styles.danger} disabled={Boolean(busy)} onClick={() => void lifecycle(policy, "archive")}>Archive</button> : null}
         </footer>
-        {versions[policy.id] ? <div className={styles.history}>{versions[policy.id].map((version) => <div key={version.version}><strong>v{version.version}</strong><span>{when(version.createdAtUnixSeconds)}</span><small>${version.rules.totalCeilingUsd} total · ${version.rules.maxPerCallUsd}/call · {version.rules.allowedProviders.length} providers</small><Link href={`/tasks/new?policy=${encodeURIComponent(policy.id)}&version=${version.version}`}>Use this version</Link></div>)}</div> : null}
+        {versions[policy.id] ? <div className={styles.history}>{versions[policy.id].map((version) => <div key={version.version}><strong>v{version.version}</strong><span>{when(version.createdAtUnixSeconds)}</span><small>${version.rules.totalCeilingUsd} total · ${version.rules.maxPerCallUsd}/call · {version.rules.allowedProviders.length} providers</small>{policy.status === "active" ? <Link href={`/tasks/new?policy=${encodeURIComponent(policy.id)}&version=${version.version}`}>Use this version</Link> : <span>Archived</span>}</div>)}</div> : null}
       </article>)}
     </section>}
     {open ? <PolicyEditor form={form} setForm={setForm} providers={providers} editing={editing} busy={busy === "save"} close={() => setOpen(false)} save={save} /> : null}
