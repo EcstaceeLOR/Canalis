@@ -4,6 +4,8 @@ import type {
   PersistedChannel,
   PersistedProvider,
   PersistedTask,
+  ProviderHealthUpdate,
+  ProviderRecordInput,
 } from "@canalis/application";
 import type {
   RouteFlow,
@@ -30,14 +32,28 @@ function objectValue(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
+function isoString(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (value instanceof Date) return value.toISOString();
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.valueOf()) ? String(value) : parsed.toISOString();
+}
+
+function count(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function mapTask(row: Record<string, unknown>): PersistedTask {
   const capsRaw = objectValue(row.provider_caps_atomic) ?? {};
   const providerCapsAtomic = Object.fromEntries(
     Object.entries(capsRaw).map(([key, value]) => [key, big(value)]),
   );
-  const allowed = Array.isArray(row.allowed_provider_ids)
-    ? row.allowed_provider_ids.map(String)
-    : [];
+  const allowed = stringArray(row.allowed_provider_ids);
 
   return {
     id: String(row.id),
@@ -94,6 +110,47 @@ function mapChannel(row: Record<string, unknown>): PersistedChannel {
     updatedAtUnixSeconds: big(row.updated_at_unix),
   };
 }
+
+function mapProvider(row: Record<string, unknown>): PersistedProvider {
+  const secrets = objectValue(row.secret_config) ?? {};
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    payee: String(row.payee),
+    protocol: String(row.protocol) as PersistedProvider["protocol"],
+    description: String(row.description),
+    mode: String(row.mode) as PersistedProvider["mode"],
+    ...(optionalString(row.endpoint) ? { endpoint: optionalString(row.endpoint) } : {}),
+    enabled: Boolean(row.enabled),
+    supportedAssets: stringArray(row.supported_assets),
+    supportedNetworks: stringArray(row.supported_networks),
+    pricingModel: objectValue(row.pricing_model) ?? {},
+    ...(row.default_channel_ceiling_atomic !== null && row.default_channel_ceiling_atomic !== undefined
+      ? { defaultChannelCeilingAtomic: big(row.default_channel_ceiling_atomic) }
+      : {}),
+    healthStatus: String(row.health_status) as PersistedProvider["healthStatus"],
+    ...(optionalString(row.health_message) ? { healthMessage: optionalString(row.health_message) } : {}),
+    ...(isoString(row.last_health_at) ? { lastHealthAt: isoString(row.last_health_at) } : {}),
+    ...(isoString(row.last_success_at) ? { lastSuccessAt: isoString(row.last_success_at) } : {}),
+    ...(isoString(row.last_error_at) ? { lastErrorAt: isoString(row.last_error_at) } : {}),
+    ...(optionalString(row.last_error) ? { lastError: optionalString(row.last_error) } : {}),
+    hasSecrets: Object.keys(secrets).length > 0,
+    secretKeys: Object.keys(secrets).sort(),
+    usage: {
+      tasks: count(row.task_count),
+      channels: count(row.channel_count),
+      flows: count(row.flow_count),
+    },
+  };
+}
+
+const providerSelect = `
+  SELECT p.*,
+    (SELECT COUNT(DISTINCT c.task_id)::int FROM channels c WHERE c.provider_id = p.id) AS task_count,
+    (SELECT COUNT(*)::int FROM channels c WHERE c.provider_id = p.id) AS channel_count,
+    (SELECT COUNT(*)::int FROM flows f WHERE f.provider_id = p.id) AS flow_count
+  FROM providers p
+`;
 
 export class PostgresCanalisRepository implements CanalisRepository {
   private readonly sql: Sql;
@@ -276,19 +333,116 @@ export class PostgresCanalisRepository implements CanalisRepository {
   }
 
   async listProviders(): Promise<PersistedProvider[]> {
-    const rows = await this.sql<Record<string, unknown>[]>`
-      SELECT * FROM providers ORDER BY id ASC
+    const rows = await this.sql.unsafe<Record<string, unknown>[]>(
+      `${providerSelect} ORDER BY p.name ASC, p.id ASC`,
+    );
+    return rows.map(mapProvider);
+  }
+
+  async getProvider(providerId: string): Promise<PersistedProvider | null> {
+    const rows = await this.sql.unsafe<Record<string, unknown>[]>(
+      `${providerSelect} WHERE p.id = $1 LIMIT 1`,
+      [providerId],
+    );
+    return rows[0] ? mapProvider(rows[0]) : null;
+  }
+
+  async createProvider(
+    provider: ProviderRecordInput,
+    secretHeaders: Record<string, string> = {},
+  ): Promise<void> {
+    await this.sql`
+      INSERT INTO providers (
+        id, name, payee, protocol, mode, description, endpoint, enabled,
+        supported_assets, supported_networks, pricing_model,
+        default_channel_ceiling_atomic, secret_config
+      ) VALUES (
+        ${provider.id}, ${provider.name}, ${provider.payee}, ${provider.protocol},
+        ${provider.mode}, ${provider.description}, ${provider.endpoint ?? null},
+        ${provider.enabled}, ${this.sql.json(provider.supportedAssets)},
+        ${this.sql.json(provider.supportedNetworks)}, ${this.sql.json(provider.pricingModel)},
+        ${provider.defaultChannelCeilingAtomic?.toString() ?? null},
+        ${this.sql.json(secretHeaders)}
+      )
     `;
-    return rows.map((row) => ({
-      id: String(row.id),
-      name: String(row.name),
-      payee: String(row.payee),
-      protocol: String(row.protocol) as PersistedProvider["protocol"],
-      description: String(row.description),
-      mode: String(row.mode) as PersistedProvider["mode"],
-      ...(optionalString(row.endpoint) ? { endpoint: optionalString(row.endpoint) } : {}),
-      ...(objectValue(row.config) ? { config: objectValue(row.config) } : {}),
-    }));
+  }
+
+  async updateProvider(
+    providerId: string,
+    provider: Omit<ProviderRecordInput, "id">,
+    options: {
+      secretHeaders?: Record<string, string>;
+      clearSecrets?: boolean;
+    } = {},
+  ): Promise<void> {
+    let secrets = options.clearSecrets
+      ? {}
+      : await this.getProviderSecretHeaders(providerId);
+    if (options.secretHeaders) secrets = { ...options.secretHeaders };
+
+    await this.sql`
+      UPDATE providers
+      SET name = ${provider.name},
+          payee = ${provider.payee},
+          protocol = ${provider.protocol},
+          mode = ${provider.mode},
+          description = ${provider.description},
+          endpoint = ${provider.endpoint ?? null},
+          enabled = ${provider.enabled},
+          supported_assets = ${this.sql.json(provider.supportedAssets)},
+          supported_networks = ${this.sql.json(provider.supportedNetworks)},
+          pricing_model = ${this.sql.json(provider.pricingModel)},
+          default_channel_ceiling_atomic = ${provider.defaultChannelCeilingAtomic?.toString() ?? null},
+          secret_config = ${this.sql.json(secrets)},
+          health_status = CASE
+            WHEN endpoint IS DISTINCT FROM ${provider.endpoint ?? null}
+              OR protocol IS DISTINCT FROM ${provider.protocol}
+              OR mode IS DISTINCT FROM ${provider.mode}
+            THEN 'unknown'
+            ELSE health_status
+          END,
+          health_message = CASE
+            WHEN endpoint IS DISTINCT FROM ${provider.endpoint ?? null}
+              OR protocol IS DISTINCT FROM ${provider.protocol}
+              OR mode IS DISTINCT FROM ${provider.mode}
+            THEN 'Configuration changed; run a new health check.'
+            ELSE health_message
+          END,
+          updated_at = NOW()
+      WHERE id = ${providerId}
+    `;
+  }
+
+  async getProviderSecretHeaders(providerId: string): Promise<Record<string, string>> {
+    const rows = await this.sql<Record<string, unknown>[]>`
+      SELECT secret_config FROM providers WHERE id = ${providerId} LIMIT 1
+    `;
+    const raw = rows[0] ? objectValue(rows[0].secret_config) ?? {} : {};
+    return Object.fromEntries(
+      Object.entries(raw)
+        .filter(([, value]) => typeof value === "string")
+        .map(([key, value]) => [key, String(value)]),
+    );
+  }
+
+  async recordProviderHealth(providerId: string, update: ProviderHealthUpdate): Promise<void> {
+    await this.sql`
+      UPDATE providers
+      SET health_status = ${update.status},
+          health_message = ${update.message},
+          last_health_at = ${update.checkedAt},
+          last_success_at = CASE
+            WHEN ${update.successAt ?? null}::text IS NULL THEN last_success_at
+            ELSE ${update.successAt ?? null}::timestamptz
+          END,
+          last_error_at = CASE
+            WHEN ${update.errorAt ?? null}::text IS NULL THEN last_error_at
+            ELSE ${update.errorAt ?? null}::timestamptz
+          END,
+          last_error = ${update.status === "healthy" ? null : update.error ?? update.message},
+          updated_at = NOW()
+      WHERE id = ${providerId}
+    `;
   }
 
   async saveExecution(
@@ -339,7 +493,7 @@ export class PostgresCanalisRepository implements CanalisRepository {
               ${flow.receipt.protocol}, ${flow.receipt.authorizationId},
               ${flow.receipt.paymentReference ?? null}, ${flow.receipt.responseHash},
               ${flow.receipt.timestampUnixSeconds.toString()},
-              ${flow.receipt.protocolMetadata ? tx.json(flow.receipt.protocolMetadata) : null}
+              ${flow.receipt.protocolMetadata ? this.sql.json(flow.receipt.protocolMetadata) : null}
             )
             ON CONFLICT (flow_id) DO NOTHING
           `;
