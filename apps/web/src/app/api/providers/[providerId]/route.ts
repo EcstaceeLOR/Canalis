@@ -54,7 +54,54 @@ export async function PATCH(
       return NextResponse.json({ provider });
     }
 
+    const current = await repository.getProvider(providerId, identity.walletAddress);
+    if (!current || current.systemManaged) {
+      throw new ApplicationError(
+        "PROVIDER_NOT_FOUND",
+        "Provider not found or is system-managed.",
+        404,
+      );
+    }
+
     const input = parseProviderRegistryUpdate(body);
+    const endpoint = input.endpoint === undefined ? current.endpoint : input.endpoint ?? undefined;
+    const networks = input.supportedNetworks ?? current.supportedNetworks;
+    const assets = input.supportedAssets ?? current.supportedAssets;
+    const pricingModel = input.pricingModel ?? current.pricingModel;
+    const hasFixedPrice =
+      input.fixedPriceUsd === undefined
+        ? Boolean(current.fixedPriceAtomic)
+        : input.fixedPriceUsd !== null;
+
+    if (current.protocol !== "demo" && !endpoint) {
+      throw new ApplicationError(
+        "VALIDATION_ERROR",
+        `${current.protocol.toUpperCase()} providers require an endpoint.`,
+        400,
+      );
+    }
+    if (current.protocol !== "demo" && networks.length === 0) {
+      throw new ApplicationError(
+        "VALIDATION_ERROR",
+        "Live providers must declare at least one supported network.",
+        400,
+      );
+    }
+    if (current.protocol !== "demo" && assets.length === 0) {
+      throw new ApplicationError(
+        "VALIDATION_ERROR",
+        "Live providers must declare at least one supported asset.",
+        400,
+      );
+    }
+    if (pricingModel === "fixed" && !hasFixedPrice) {
+      throw new ApplicationError(
+        "VALIDATION_ERROR",
+        "Fixed-price providers require a fixed price.",
+        400,
+      );
+    }
+
     const credentialMutation = input.credential
       ? {
           kind: input.credential.kind,
