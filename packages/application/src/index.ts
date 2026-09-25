@@ -2,6 +2,7 @@ export * from "./auth.js";
 export * from "./channel-workspace.js";
 export * from "./contracts.js";
 export * from "./errors.js";
+export * from "./operations.js";
 export * from "./policy-workspace.js";
 export * from "./provider-registry.js";
 export * from "./repository.js";
