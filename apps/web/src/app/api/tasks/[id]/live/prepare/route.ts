@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { ApplicationError } from "@canalis/application";
-import { apiErrorResponse } from "../../../../../../../server/api";
-import { assertWalletOwnsTask, requireWalletSession } from "../../../../../../../server/auth";
-import { getCanalisApplication } from "../../../../../../../server/canalis";
-import { getLiveChannelGateway, requireLiveTask } from "../../../../../../../server/live-channels";
+import { apiErrorResponse } from "../../../../../../server/api";
+import { assertWalletOwnsTask, requireWalletSession } from "../../../../../../server/auth";
+import { getCanalisApplication } from "../../../../../../server/canalis";
+import { getLiveChannelGateway, requireLiveTask } from "../../../../../../server/live-channels";
 
 export async function POST(
   request: Request,
