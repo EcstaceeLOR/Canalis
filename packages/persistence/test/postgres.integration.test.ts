@@ -1,7 +1,11 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { CanalisApplication } from "@canalis/application";
 import postgres from "postgres";
-import { migrateDatabase, PostgresCanalisRepository } from "../src/index.js";
+import {
+  migrateDatabase,
+  PostgresCanalisRepository,
+  PostgresLiveChannelRepository,
+} from "../src/index.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const dbDescribe = databaseUrl ? describe : describe.skip;
@@ -64,5 +68,58 @@ dbDescribe("Postgres persistence integration", () => {
       complete: true,
     });
     await repositoryThree.close();
+  });
+
+  it("allows only one server instance to acquire a live channel finalization lease", async () => {
+    const repository = new PostgresCanalisRepository(databaseUrl!);
+    const app = new CanalisApplication(repository, () => 1_800_001_000n);
+    const created = await app.createTask({
+      owner: "lease-owner",
+      budgetUsd: "1.00",
+      maxPerCallUsd: "0.25",
+      allowedProviders: ["search"],
+      mode: "x402",
+    });
+    await app.recordChannelState(created.task.id, "search", {
+      status: "open",
+      channelAddress: "lease-channel-address",
+      openTransactionSignature: "lease-open-signature",
+      recoveryState: { stage: "open" },
+    });
+
+    const firstRepository = new PostgresLiveChannelRepository(databaseUrl!);
+    const secondRepository = new PostgresLiveChannelRepository(databaseUrl!);
+    const input = {
+      taskId: created.task.id,
+      providerId: "search",
+      cumulativeAmountAtomic: 50_000n,
+      startedAtUnixSeconds: 1_800_001_100n,
+    };
+    const results = await Promise.all([
+      firstRepository.beginFinalization(input),
+      secondRepository.beginFinalization(input),
+    ]);
+
+    expect(results.filter((result) => result === "acquired")).toHaveLength(1);
+    expect(results.filter((result) => result === "busy")).toHaveLength(1);
+
+    const leased = await app.getTask(created.task.id);
+    const searchChannel = leased.channels.find((channel) => channel.providerId === "search");
+    expect(searchChannel?.recoveryState?.stage).toBe("finalization-started");
+    expect(searchChannel?.recoveryState?.attemptedSettledAtomic).toBe("50000");
+
+    await app.recordChannelState(created.task.id, "search", {
+      status: "distributed",
+      distributionTransactionSignature: "lease-final-signature",
+      recoveryState: { stage: "finalized" },
+    });
+    await expect(firstRepository.beginFinalization({
+      ...input,
+      startedAtUnixSeconds: 1_800_001_200n,
+    })).resolves.toBe("terminal");
+
+    await firstRepository.close();
+    await secondRepository.close();
+    await repository.close();
   });
 });
