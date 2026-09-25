@@ -7,6 +7,23 @@ import { useWalletIdentity } from "../wallet/wallet-identity";
 import styles from "./notification-center.module.css";
 
 type Toast = { id: string; message: string; severity: "success" | "warning" | "critical" | "info" };
+type NotificationPreferences = {
+  taskFailures: boolean;
+  providerIncidents: boolean;
+  settlementFailures: boolean;
+  recoveryRequired: boolean;
+};
+type NotificationSettings = {
+  notifications: NotificationPreferences;
+  product: { autoRefreshSeconds: number };
+};
+
+const defaultPreferences: NotificationPreferences = {
+  taskFailures: true,
+  providerIncidents: true,
+  settlementFailures: true,
+  recoveryRequired: true,
+};
 
 function responseError(response: Response) {
   return response.json().then((body: { error?: { message?: string } }) => body.error?.message ?? `Request failed (${response.status}).`).catch(() => `Request failed (${response.status}).`);
@@ -26,12 +43,22 @@ function eventHref(event: ActivityRecord) {
   return "/activity";
 }
 
+function notificationEnabled(event: ActivityRecord, preferences: NotificationPreferences) {
+  if (event.category === "task") return preferences.taskFailures;
+  if (event.category === "provider" || event.category === "integration") return preferences.providerIncidents;
+  if (event.category === "settlement") return preferences.settlementFailures;
+  if (event.category === "recovery" || event.category === "channel") return preferences.recoveryRequired;
+  return true;
+}
+
 export function NotificationCenter() {
   const { session } = useWalletIdentity();
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<ActivityListResult | null>(null);
   const [error, setError] = useState("");
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [preferences, setPreferences] = useState<NotificationPreferences>(defaultPreferences);
+  const [autoRefreshSeconds, setAutoRefreshSeconds] = useState(30);
   const initialized = useRef(false);
   const seen = useRef(new Map<string, string>());
 
@@ -55,7 +82,12 @@ export function NotificationCenter() {
       if (initialized.current && showNew) {
         for (const event of next.events) {
           const previousVersion = seen.current.get(event.id);
-          if ((!previousVersion || previousVersion !== event.sourceVersion) && !event.read && event.state === "open" && (event.severity === "critical" || event.severity === "warning")) {
+          if (
+            (!previousVersion || previousVersion !== event.sourceVersion) &&
+            !event.read && event.state === "open" &&
+            (event.severity === "critical" || event.severity === "warning") &&
+            notificationEnabled(event, preferences)
+          ) {
             pushToast({ message: event.title, severity: event.severity });
           }
         }
@@ -67,12 +99,49 @@ export function NotificationCenter() {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Activity unavailable.");
     }
-  }, [pushToast, session]);
+  }, [preferences, pushToast, session]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPreferences() {
+      if (!session) {
+        setPreferences(defaultPreferences);
+        setAutoRefreshSeconds(30);
+        return;
+      }
+      try {
+        const response = await fetch("/api/settings", { credentials: "same-origin", cache: "no-store" });
+        if (!response.ok) return;
+        const body = await response.json() as { settings: NotificationSettings };
+        if (!cancelled) {
+          setPreferences(body.settings.notifications);
+          setAutoRefreshSeconds(body.settings.product.autoRefreshSeconds);
+        }
+      } catch {
+        // Safe defaults keep critical operational notifications enabled.
+      }
+    }
+    function settingsUpdated(event: Event) {
+      const detail = (event as CustomEvent<Partial<NotificationSettings>>).detail;
+      if (detail?.notifications) setPreferences(detail.notifications);
+      if (detail?.product && typeof detail.product.autoRefreshSeconds === "number") {
+        setAutoRefreshSeconds(detail.product.autoRefreshSeconds);
+      }
+    }
+    void loadPreferences();
+    window.addEventListener("canalis:settings-updated", settingsUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("canalis:settings-updated", settingsUpdated);
+    };
+  }, [session]);
 
   useEffect(() => {
     void load(false);
     if (!session) return;
-    const timer = window.setInterval(() => void load(true), 30_000);
+    const timer = autoRefreshSeconds > 0
+      ? window.setInterval(() => void load(true), autoRefreshSeconds * 1000)
+      : undefined;
     function refresh(event: Event) {
       const detail = (event as CustomEvent<{ message?: string; severity?: Toast["severity"] }>).detail;
       if (detail?.message) pushToast({ message: detail.message, severity: detail.severity ?? "info" });
@@ -80,10 +149,10 @@ export function NotificationCenter() {
     }
     window.addEventListener("canalis:activity-refresh", refresh);
     return () => {
-      window.clearInterval(timer);
+      if (timer !== undefined) window.clearInterval(timer);
       window.removeEventListener("canalis:activity-refresh", refresh);
     };
-  }, [load, pushToast, session]);
+  }, [autoRefreshSeconds, load, pushToast, session]);
 
   useEffect(() => {
     function close(event: KeyboardEvent) { if (event.key === "Escape") setOpen(false); }
