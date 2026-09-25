@@ -6,6 +6,7 @@ import "./design-system-states.css";
 import "./product.css";
 import "./wallet.css";
 import "./tasks.css";
+import "./task-detail.css";
 
 export const metadata: Metadata = {
   applicationName: "Canalis",
