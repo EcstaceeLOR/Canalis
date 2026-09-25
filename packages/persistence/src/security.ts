@@ -139,6 +139,23 @@ export class PostgresSecurityRepository {
         AND operation = ${input.operation}
         AND idempotency_key = ${input.idempotencyKey}
         AND request_hash = ${input.requestHash}
+        AND state = 'in_progress'
+    `;
+  }
+
+  async abandonIdempotency(input: {
+    ownerWallet: string;
+    operation: string;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<void> {
+    await this.sql`
+      DELETE FROM idempotency_records
+      WHERE owner_wallet = ${input.ownerWallet}
+        AND operation = ${input.operation}
+        AND idempotency_key = ${input.idempotencyKey}
+        AND request_hash = ${input.requestHash}
+        AND state = 'in_progress'
     `;
   }
 
