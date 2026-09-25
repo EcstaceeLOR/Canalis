@@ -34,6 +34,8 @@ export const createTaskRequestSchema = z
       .max(deterministicProviderIds.length)
       .default([...deterministicProviderIds]),
     mode: z.literal("deterministic").default("deterministic"),
+    initialStatus: z.enum(["draft", "active"]).default("active"),
+    expiryMinutes: z.coerce.number().int().min(1).max(10_080).default(15),
   })
   .strict();
 

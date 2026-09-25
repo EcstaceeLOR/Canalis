@@ -3,7 +3,6 @@ import {
   CanalisRouteOrchestrator,
   type ChannelReservation,
   type RouteFlow,
-  type Task,
   type TaskPaymentGraph,
 } from "@canalis/core";
 import {
@@ -31,8 +30,6 @@ import type {
   PersistedChannel,
   PersistedTask,
 } from "./repository.js";
-
-const DEFAULT_EXPIRY_SECONDS = 15n * 60n;
 
 function allocateReservations(
   budgetAtomic: bigint,
@@ -152,9 +149,9 @@ export class CanalisApplication {
         maxPerCallAtomic,
         providerCapsAtomic,
       },
-      status: "active",
+      status: parsed.initialStatus,
       createdAtUnixSeconds: now,
-      expiresAtUnixSeconds: now + DEFAULT_EXPIRY_SECONDS,
+      expiresAtUnixSeconds: now + BigInt(parsed.expiryMinutes) * 60n,
       mode: parsed.mode,
       updatedAtUnixSeconds: now,
     };
@@ -188,7 +185,7 @@ export class CanalisApplication {
     if (task.status !== "active") {
       throw new ApplicationError(
         "TASK_ALREADY_EXECUTED",
-        "This task has already completed or is no longer active.",
+        "This task is not active and cannot be executed.",
         409,
       );
     }

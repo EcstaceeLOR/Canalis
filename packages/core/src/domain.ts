@@ -1,4 +1,4 @@
-export type TaskStatus = "active" | "completed" | "cancelled";
+export type TaskStatus = "draft" | "active" | "completed" | "cancelled" | "archived";
 
 export type Budget = {
   mint: string;
