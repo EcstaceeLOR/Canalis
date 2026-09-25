@@ -131,7 +131,10 @@ BEGIN
       audit_resource_id := (source_snapshot->>'task_id') || ':' || (source_snapshot->>'provider_id') || ':' || COALESCE(source_snapshot->>'transaction_signature', 'pending');
     END IF;
   ELSE
-    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+    IF TG_OP = 'DELETE' THEN
+      RETURN OLD;
+    END IF;
+    RETURN NEW;
   END IF;
 
   INSERT INTO audit_events (
@@ -175,9 +178,9 @@ FOR EACH ROW EXECUTE FUNCTION canalis_prevent_audit_mutation();
 
 DO $$
 DECLARE
-  table_name TEXT;
+  audited_table TEXT;
 BEGIN
-  FOREACH table_name IN ARRAY ARRAY[
+  FOREACH audited_table IN ARRAY ARRAY[
     'account_settings',
     'providers',
     'reusable_policy_definitions',
@@ -188,11 +191,11 @@ BEGIN
     'settlements'
   ]
   LOOP
-    EXECUTE format('DROP TRIGGER IF EXISTS canalis_audit_%I ON %I', table_name, table_name);
+    EXECUTE format('DROP TRIGGER IF EXISTS canalis_audit_%I ON %I', audited_table, audited_table);
     EXECUTE format(
       'CREATE TRIGGER canalis_audit_%I AFTER INSERT OR UPDATE OR DELETE ON %I FOR EACH ROW EXECUTE FUNCTION canalis_write_audit_event()',
-      table_name,
-      table_name
+      audited_table,
+      audited_table
     );
   END LOOP;
 END;
