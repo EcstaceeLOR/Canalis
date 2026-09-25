@@ -57,6 +57,7 @@ export function LiveChannelPanel({ taskId }: { taskId: string }) {
   const canFinalize = payload?.task.mode === "x402" && payload.graph.flows.length > 0 && payload.channels.some((channel) => ["open", "failed"].includes(channel.status));
 
   if (!session || !payload || payload.task.mode !== "x402") return null;
+  const walletAddress = session.walletAddress;
 
   async function prepare() {
     setBusy("prepare"); setError(""); setNotice("");
@@ -74,7 +75,7 @@ export function LiveChannelPanel({ taskId }: { taskId: string }) {
     if (!paymentRequired) return;
     setBusy(`open:${channel.providerId}`); setError(""); setNotice("");
     try {
-      const paymentPayload = await createLiveX402PaymentPayload(session.walletAddress, paymentRequired);
+      const paymentPayload = await createLiveX402PaymentPayload(walletAddress, paymentRequired);
       const response = await fetch(`/api/tasks/${taskId}/live/channels/${channel.providerId}/deposit`, {
         method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ paymentPayload }),
       });
@@ -93,14 +94,14 @@ export function LiveChannelPanel({ taskId }: { taskId: string }) {
       const result = (await response.json()) as { partial?: boolean };
       setNotice(result.partial ? "Some channels need recovery. Safe retry state has been persisted." : "All provider channels finalized and unused budget returned on-chain.");
       await load();
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not finalize live channels."); }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not finalize live channels." ); }
     finally { setBusy(""); }
   }
 
   return (
     <section className={styles.panel} aria-label="Live Solana payment channels">
       <div className={styles.head}>
-        <div><span>Live Solana devnet</span><h2>Wallet-signed payment channels</h2><p>Open the reserved x402 channels, run the governed task, then settle each provider's cumulative usage. Unused channel ceilings are returned in the same terminal transaction.</p></div>
+        <div><span>Live Solana devnet</span><h2>Wallet-signed payment channels</h2><p>Open the reserved x402 channels, run the governed task, then settle each provider&apos;s cumulative usage. Unused channel ceilings are returned in the same terminal transaction.</p></div>
         <div className={styles.actions}>
           {needsPrepare ? <button disabled={Boolean(busy)} onClick={() => void prepare()}>{busy === "prepare" ? "Preparing…" : "1 · Fund & prepare"}</button> : null}
           {channelsReady && payload.graph.flows.length === 0 ? <button disabled>2 · Channels ready — run task below</button> : null}
