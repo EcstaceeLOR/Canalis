@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWalletIdentity } from "../wallet/wallet-identity";
 
 type TaskStatus = "draft" | "active" | "completed" | "cancelled" | "archived";
+type TaskMode = "deterministic" | "x402" | "mpp";
 type TaskSummary = {
   id: string;
   name: string;
@@ -37,13 +38,14 @@ type ProviderOption = {
   name: string;
   description: string;
   protocol: "demo" | "x402" | "mpp";
-  mode: "deterministic" | "x402" | "mpp";
+  mode: TaskMode;
   status: "active" | "disabled";
   healthStatus: "unknown" | "healthy" | "unhealthy";
   systemManaged: boolean;
   supportedNetworks: string[];
   supportedAssets: string[];
   defaultChannelCeilingAtomic?: string;
+  executionModes: TaskMode[];
 };
 
 type FormState = {
@@ -55,7 +57,7 @@ type FormState = {
   expiryMinutes: string;
   providers: string[];
   policyId: string;
-  mode: "deterministic" | "x402" | "mpp";
+  mode: TaskMode;
 };
 
 const defaultForm: FormState = {
@@ -102,12 +104,16 @@ async function errorMessage(response: Response) {
   }
 }
 
-function providerCanRun(provider: ProviderOption) {
+function providerConfigured(provider: ProviderOption) {
   return provider.status === "active" && (provider.protocol === "demo" || provider.healthStatus === "healthy");
 }
 
-function providerFitsMode(provider: ProviderOption, mode: FormState["mode"]) {
+function providerFitsMode(provider: ProviderOption, mode: TaskMode) {
   return provider.mode === mode || (mode === "x402" && provider.systemManaged && provider.protocol === "demo");
+}
+
+function providerRuntimeReady(provider: ProviderOption, mode: TaskMode) {
+  return providerConfigured(provider) && provider.executionModes.includes(mode);
 }
 
 export function TasksWorkspace() {
@@ -190,7 +196,7 @@ export function TasksWorkspace() {
     if (!session || providers.length === 0) return;
     const requested = new URLSearchParams(window.location.search).get("provider");
     if (!requested) return;
-    const match = providers.find((candidate) => candidate.id === requested && providerCanRun(candidate));
+    const match = providers.find((candidate) => candidate.id === requested && providerConfigured(candidate));
     if (!match) return;
     const mode = match.mode;
     setForm({ ...defaultForm, mode, providers: [match.id] });
@@ -200,7 +206,7 @@ export function TasksWorkspace() {
 
   function openCreate() {
     const defaults = providers
-      .filter((candidate) => providerCanRun(candidate) && candidate.mode === "deterministic")
+      .filter((candidate) => providerRuntimeReady(candidate, "deterministic"))
       .slice(0, 3)
       .map((candidate) => candidate.id);
     setForm({ ...defaultForm, providers: defaults });
@@ -216,9 +222,9 @@ export function TasksWorkspace() {
     }));
   }
 
-  function changeMode(mode: FormState["mode"]) {
+  function changeMode(mode: TaskMode) {
     const defaults = providers
-      .filter((candidate) => providerCanRun(candidate) && providerFitsMode(candidate, mode))
+      .filter((candidate) => providerRuntimeReady(candidate, mode) && providerFitsMode(candidate, mode))
       .slice(0, mode === "x402" ? 3 : 1)
       .map((candidate) => candidate.id);
     setForm((current) => ({ ...current, mode, providers: defaults }));
@@ -370,9 +376,11 @@ function TaskCard({ task, busy, lifecycle }: { task: TaskSummary; busy: boolean;
   return <article className="task-card"><div className="task-card-top"><Status status={task.status} /><small>Updated {when(task.updatedAtUnixSeconds)}</small></div><Link href={`/tasks/${task.id}`}><h3>{task.name}</h3></Link><p>{task.description || "No description"}</p><div className="task-card-meta"><span title={task.owner}>Owner {shortAddress(task.owner)}</span><span>Created {when(task.createdAtUnixSeconds)}</span></div><div className="task-card-metrics"><div><span>Budget</span><strong>{usd(task.budgetAtomic)}</strong></div><div><span>Spent</span><strong>{usd(task.spentAtomic)}</strong></div><div><span>Recoverable</span><strong>{usd(task.recoverableAtomic)}</strong></div></div><div className="provider-chips">{task.allowedProviders.map((id) => <span key={id}>{id}</span>)}</div><TaskActions task={task} busy={busy} lifecycle={lifecycle} /></article>;
 }
 
-function TaskComposer({ form, setForm, providers, toggleProvider, changeMode, creating, close, createTask }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>>; providers: ProviderOption[]; toggleProvider: (id: string) => void; changeMode: (mode: FormState["mode"]) => void; creating: boolean; close: () => void; createTask: (draft: boolean) => Promise<void> }) {
+function TaskComposer({ form, setForm, providers, toggleProvider, changeMode, creating, close, createTask }: { form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>>; providers: ProviderOption[]; toggleProvider: (id: string) => void; changeMode: (mode: TaskMode) => void; creating: boolean; close: () => void; createTask: (draft: boolean) => Promise<void> }) {
   const compatibleProviders = providers.filter((candidate) => providerFitsMode(candidate, form.mode));
-  const valid = form.name.trim() && form.providers.length > 0 && Number(form.budgetUsd) > 0 && Number(form.maxPerCallUsd) > 0;
+  const selectedProviders = form.providers.map((id) => providers.find((provider) => provider.id === id)).filter((provider): provider is ProviderOption => Boolean(provider));
+  const valid = Boolean(form.name.trim()) && form.providers.length > 0 && Number(form.budgetUsd) > 0 && Number(form.maxPerCallUsd) > 0;
+  const runtimeReady = valid && selectedProviders.length === form.providers.length && selectedProviders.every((provider) => providerRuntimeReady(provider, form.mode));
   return (
     <div className="task-modal-backdrop" role="presentation" onMouseDown={close}>
       <div className="task-composer" role="dialog" aria-modal="true" aria-label="Create Canalis task" onMouseDown={(event) => event.stopPropagation()}>
@@ -380,15 +388,15 @@ function TaskComposer({ form, setForm, providers, toggleProvider, changeMode, cr
         <div className="task-form-grid">
           <label className="task-field task-field-wide"><span>Name</span><input autoFocus maxLength={120} value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Research competitor pricing" /></label>
           <label className="task-field task-field-wide"><span>Description</span><textarea maxLength={1000} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="What should this agent accomplish?" /></label>
-          <label className="task-field"><span>Execution mode</span><select value={form.mode} onChange={(event) => changeMode(event.target.value as FormState["mode"])}><option value="deterministic">Deterministic</option><option value="x402">x402 / Solana channels</option><option value="mpp">MPP</option></select><small>Provider options below are constrained to this execution mode.</small></label>
+          <label className="task-field"><span>Execution mode</span><select value={form.mode} onChange={(event) => changeMode(event.target.value as TaskMode)}><option value="deterministic">Deterministic</option><option value="x402">x402 / Solana channels</option><option value="mpp">MPP</option></select><small>Provider options below are constrained to this execution mode.</small></label>
           <label className="task-field"><span>Budget (USDC)</span><input inputMode="decimal" value={form.budgetUsd} onChange={(event) => setForm((current) => ({ ...current, budgetUsd: event.target.value }))} /></label>
           <label className="task-field"><span>Max per call</span><input inputMode="decimal" value={form.maxPerCallUsd} onChange={(event) => setForm((current) => ({ ...current, maxPerCallUsd: event.target.value }))} /></label>
           <label className="task-field"><span>Expiry</span><select value={form.expiryMinutes} onChange={(event) => setForm((current) => ({ ...current, expiryMinutes: event.target.value }))}><option value="15">15 minutes</option><option value="60">1 hour</option><option value="360">6 hours</option><option value="1440">24 hours</option><option value="10080">7 days</option></select></label>
           <label className="task-field"><span>Policy</span><select value={form.policyId} onChange={(event) => setForm((current) => ({ ...current, policyId: event.target.value }))}><option value="inline-bounded">Inline bounded-spend policy</option></select><small>Saved reusable policies arrive in the Policies workspace; this policy snapshot is persisted with the task.</small></label>
           <label className="task-field task-field-wide"><span>Agent ID</span><input value={form.agentId} onChange={(event) => setForm((current) => ({ ...current, agentId: event.target.value }))} /></label>
-          <fieldset className="task-field task-field-wide"><legend>Provider allowlist</legend><div className="provider-selector">{compatibleProviders.map((item) => { const runnable = providerCanRun(item); return <label key={item.id}><input type="checkbox" disabled={!runnable} checked={form.providers.includes(item.id)} onChange={() => toggleProvider(item.id)} /><span><strong>{item.name}</strong><small>{item.protocol === "demo" ? "Deterministic" : item.protocol.toUpperCase()} · {item.healthStatus}{item.defaultChannelCeilingAtomic ? ` · default ceiling ${usd(item.defaultChannelCeilingAtomic)}` : ""}</small></span></label>; })}</div>{compatibleProviders.length === 0 ? <small>No providers are configured for this mode. Add and verify one in the <Link href="/providers">Providers workspace</Link>.</small> : null}</fieldset>
+          <fieldset className="task-field task-field-wide"><legend>Provider allowlist</legend><div className="provider-selector">{compatibleProviders.map((item) => { const configured = providerConfigured(item); const ready = providerRuntimeReady(item, form.mode); return <label key={item.id}><input type="checkbox" disabled={!configured} checked={form.providers.includes(item.id)} onChange={() => toggleProvider(item.id)} /><span><strong>{item.name}</strong><small>{item.protocol === "demo" ? "Deterministic" : item.protocol.toUpperCase()} · {item.healthStatus}{item.defaultChannelCeilingAtomic ? ` · default ceiling ${usd(item.defaultChannelCeilingAtomic)}` : ""} · {ready ? "runtime ready" : configured ? "configuration only" : "not selectable"}</small></span></label>; })}</div>{compatibleProviders.length === 0 ? <small>No providers are configured for this mode. Add and verify one in the <Link href="/providers">Providers workspace</Link>.</small> : null}{valid && !runtimeReady ? <small>Configuration-only providers can be saved in a draft, but an active task requires every selected provider to have a connected non-custodial runtime.</small> : null}</fieldset>
         </div>
-        <div className="task-composer-actions"><button className="secondary-action" type="button" disabled={!valid || creating} onClick={() => void createTask(true)}>{creating ? "Saving…" : "Save draft"}</button><button className="primary-action" type="button" disabled={!valid || creating} onClick={() => void createTask(false)}>{creating ? "Creating…" : "Create active task"} <span>→</span></button></div>
+        <div className="task-composer-actions"><button className="secondary-action" type="button" disabled={!valid || creating} onClick={() => void createTask(true)}>{creating ? "Saving…" : "Save draft"}</button><button className="primary-action" type="button" disabled={!runtimeReady || creating} onClick={() => void createTask(false)}>{creating ? "Creating…" : "Create active task"} <span>→</span></button></div>
       </div>
     </div>
   );
