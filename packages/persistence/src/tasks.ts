@@ -171,15 +171,28 @@ export class PostgresTaskWorkspaceRepository {
     status: TaskStatus,
     updatedAtUnixSeconds: bigint,
     expiresAtUnixSeconds?: bigint,
+    expectedStatuses?: readonly TaskStatus[],
   ): Promise<boolean> {
-    const rows = await this.sql<{ id: string }[]>`
-      UPDATE tasks
-      SET status = ${status},
-          updated_at_unix = ${updatedAtUnixSeconds.toString()},
-          expires_at_unix = COALESCE(${expiresAtUnixSeconds?.toString() ?? null}, expires_at_unix)
-      WHERE id = ${taskId} AND owner = ${owner}
-      RETURNING id
-    `;
+    const expected = expectedStatuses?.length ? [...expectedStatuses] : undefined;
+    const rows = expected
+      ? await this.sql<{ id: string }[]>`
+          UPDATE tasks
+          SET status = ${status},
+              updated_at_unix = ${updatedAtUnixSeconds.toString()},
+              expires_at_unix = COALESCE(${expiresAtUnixSeconds?.toString() ?? null}, expires_at_unix)
+          WHERE id = ${taskId}
+            AND owner = ${owner}
+            AND status = ANY(${expected}::text[])
+          RETURNING id
+        `
+      : await this.sql<{ id: string }[]>`
+          UPDATE tasks
+          SET status = ${status},
+              updated_at_unix = ${updatedAtUnixSeconds.toString()},
+              expires_at_unix = COALESCE(${expiresAtUnixSeconds?.toString() ?? null}, expires_at_unix)
+          WHERE id = ${taskId} AND owner = ${owner}
+          RETURNING id
+        `;
     return rows.length > 0;
   }
 

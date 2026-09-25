@@ -3,6 +3,7 @@ import { apiErrorResponse } from "../../../../../server/api";
 import { assertWalletOwnsTask, requireWalletSession } from "../../../../../server/auth";
 import { getCanalisApplication } from "../../../../../server/canalis";
 import { assertTaskProvidersAvailable } from "../../../../../server/provider-selection";
+import { runIdempotentMutation } from "../../../../../server/security";
 
 export async function POST(
   request: Request,
@@ -11,17 +12,25 @@ export async function POST(
   try {
     const identity = await requireWalletSession(request);
     const { id } = await params;
-    const application = await getCanalisApplication();
-    const existing = await application.getTask(id);
-    assertWalletOwnsTask(existing, identity);
-    await assertTaskProvidersAvailable(
-      identity.walletAddress,
-      existing.task.allowedProviders,
-      existing.task.mode,
-      { requireRuntime: true },
-    );
-    const task = await application.executeTask(id);
-    return NextResponse.json(task);
+    return await runIdempotentMutation({
+      request,
+      ownerWallet: identity.walletAddress,
+      operation: "task.execute",
+      resourceKey: `task:${id}:mutation`,
+      handler: async () => {
+        const application = await getCanalisApplication();
+        const existing = await application.getTask(id);
+        assertWalletOwnsTask(existing, identity);
+        await assertTaskProvidersAvailable(
+          identity.walletAddress,
+          existing.task.allowedProviders,
+          existing.task.mode,
+          { requireRuntime: true },
+        );
+        const task = await application.executeTask(id);
+        return NextResponse.json(task);
+      },
+    });
   } catch (error) {
     return apiErrorResponse(error);
   }

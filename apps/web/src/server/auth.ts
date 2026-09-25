@@ -4,7 +4,9 @@ import {
   type WalletSessionIdentity,
 } from "@canalis/application";
 import { PostgresWalletAuthRepository } from "@canalis/persistence";
+import { assertRequestOrigin } from "./api";
 import { getCanalisApplication } from "./canalis";
+import { enforceAuthenticatedRateLimit } from "./security";
 
 export const CANALIS_SESSION_COOKIE = "canalis_session";
 
@@ -28,7 +30,6 @@ export async function getWalletAuthService(): Promise<WalletAuthService> {
   if (authService) return authService;
   if (!authInitialization) {
     authInitialization = (async () => {
-      // Reuse the canonical application initialization so all migrations are applied first.
       await getCanalisApplication();
       authRepository = new PostgresWalletAuthRepository(databaseUrl());
       authService = new WalletAuthService(authRepository);
@@ -54,11 +55,15 @@ export function sessionTokenFromRequest(request: Request): string | undefined {
 }
 
 export async function requireWalletSession(request: Request): Promise<WalletSessionIdentity> {
+  assertRequestOrigin(request);
   const service = await getWalletAuthService();
-  return service.authenticate(sessionTokenFromRequest(request));
+  const identity = await service.authenticate(sessionTokenFromRequest(request));
+  await enforceAuthenticatedRateLimit(request, identity.walletAddress);
+  return identity;
 }
 
 export async function revokeWalletSession(request: Request): Promise<void> {
+  assertRequestOrigin(request);
   const service = await getWalletAuthService();
   await service.revoke(sessionTokenFromRequest(request));
 }
