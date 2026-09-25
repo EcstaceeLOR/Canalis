@@ -6,6 +6,7 @@ import {
   requireWalletSession,
   revokeWalletSession,
 } from "../../../../server/auth";
+import { enforcePublicRateLimit } from "../../../../server/security";
 
 const COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60;
 
@@ -30,6 +31,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    await enforcePublicRateLimit(request, "auth-session", 10, 60);
     const body = (await readJsonBody(request)) as {
       challengeId?: unknown;
       walletAddress?: unknown;
