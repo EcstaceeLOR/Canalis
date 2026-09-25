@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CanalisLogo } from "../brand/canalis-logo";
 import { useWalletIdentity, WalletAccountControl } from "../wallet/wallet-identity";
 import { NotificationCenter } from "./notification-center";
-import { ModalSurface } from "./product-ux";
+import { ModalSurface, ProductUxRuntime } from "./product-ux";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", glyph: "⌂" },
@@ -120,6 +120,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="product-shell" data-environment={runtime.environment}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
+      <ProductUxRuntime />
 
       <aside id="product-navigation" className={`product-sidebar ${menuOpen ? "open" : ""}`} aria-label="Primary product navigation">
         <div className="sidebar-brand-row">
