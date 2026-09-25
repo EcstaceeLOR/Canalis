@@ -1,195 +1,146 @@
 # Canalis
 
-**The payment orchestration layer for autonomous agents on Solana.**
+**Governed payment orchestration for autonomous agents on Solana.**
 
-> Give an agent a budget. Canalis handles everything it pays for.
+> Give an agent a budget. Keep everything it pays for bounded, attributable, and recoverable.
 
-### 🌐 [Live Product](https://canalis-git-deploy-web-standalone-demola-codes.vercel.app)
+### 🌐 [Launch Canalis](https://canalis-sigma.vercel.app)
 
-Canalis turns one approved task budget into policy-controlled payments across multiple machine services. It uses **Solana payment-channel semantics** to keep high-frequency authorizations offchain, records every paid action in a task-level payment graph, settles actual cumulative usage, and makes unused budget recoverable by the payer.
+Canalis turns one approved task budget into policy-controlled payments across machine-service providers. It keeps high-frequency authorization offchain where appropriate, records each paid action in a wallet-scoped task graph, settles actual cumulative usage through the Solana payment-channel boundary, and preserves unused capacity for payer recovery.
 
-## The 20-second product flow
-
-Create a `$1.00 USDC` agent task with a `$0.25` per-call cap and approve three providers:
+## Product model
 
 ```text
-$1.00 approved task budget
-        |
-        +--> Search       $0.05
-        +--> Data         $0.03
-        +--> Inference    $0.12
-        |
-        +--> $0.20 actually authorized
-        +--> $0.80 recoverable
+wallet owner
+   │
+   ├─ approves task budget + spending policy
+   │
+   ▼
+Canalis route orchestrator
+   │
+   ├─ provider allowlist / caps / network / asset / protocol checks
+   ├─ cumulative authorization + receipt evidence
+   └─ provider execution boundary
+   │
+   ▼
+Solana payment channel
+   │
+   ├─ settle actual authorized usage
+   └─ recover unused escrow to payer
 ```
 
-Every paid call is checked against task policy **before paid work is returned**. Each provider route advances cumulative authorization independently, while Canalis maintains one global task budget and one verifiable receipt graph.
+The agent never gets permission to silently increase its mandate. Canalis enforces total ceilings, per-call caps, provider constraints, task expiry, and wallet ownership before paid work is accepted.
 
-## Why Solana payment channels matter
+## Production surfaces
 
-An autonomous workflow can make many small paid calls. Sending an onchain transaction for every call creates unnecessary settlement overhead, while simply giving an agent a funded wallet removes financial control.
+- **Public landing + onboarding** — visitors see the product model before the control plane; new wallets get a provider → policy → task setup path backed by persisted state.
+- **Tasks** — wallet-scoped tasks with drafts, execution, duplication, reruns, status, immutable policy snapshots, and task-level evidence.
+- **Provider Registry** — deterministic, x402, and MPP provider configuration with endpoint, payee, assets/networks, pricing, credentials, health, and runtime readiness.
+- **Policies** — reusable, versioned spending policies with per-task overrides.
+- **Channels** — channel status, cumulative authorization, finalization, distribution, payer recovery, Explorer evidence, and retry-safe partial-failure handling.
+- **Transactions** — unified offchain/onchain audit records with filters and export.
+- **Dashboard + Analytics** — wallet-scoped operational metrics, settlement health, provider incidents, and drill-downs.
+- **Activity + Recovery** — durable user-visible incidents with safe guided actions for provider, settlement, channel, and recovery failures.
+- **Settings** — environment, Solana network, default asset, task defaults, notifications, and integrations.
 
-Canalis uses the payment-channel model instead:
+## Runtime truth
+
+Canalis does not fabricate blockchain evidence or pretend a configured integration is executable when the required signing runtime is absent.
+
+**Available in the current product:**
+
+- persistent wallet-scoped control plane,
+- deterministic provider execution,
+- built-in provider roles used by the supported live x402/devnet channel path,
+- real Solana devnet payment-channel proof,
+- policy, receipts, transactions, analytics, activity, settlement and recovery workflows.
+
+**Configuration-ready but execution-gated:** external x402 and MPP endpoints can be registered, credentialed, and protocol-health-checked. Autonomous execution remains blocked until the deployment has the required non-custodial signer/session runtime.
+
+**Mainnet:** account settings support a mainnet profile, but task creation is intentionally blocked while the current payment-channel signer/runtime remains devnet-only.
+
+## Solana proof
+
+The committed devnet proof demonstrates the canonical lifecycle without a replacement smart contract:
 
 ```text
-open capped channel
-      ↓
-signed cumulative vouchers offchain
-      ↓
-settle + seal actual usage
-      ↓
-distribute provider payout
-      ↓
-return unused escrow to payer
+100,000 unit channel ceiling
+        ↓
+30,000 cumulative provider settlement
+        ↓
+70,000 unused units returned to payer
 ```
 
-For Canalis v1, each provider has its own channel ceiling, but the user sees a single task budget. The core accounting invariant is:
+See [`docs/JUDGE_DEMO.md`](docs/JUDGE_DEMO.md) for the reproducible walkthrough and [`docs/settlement-finalization.md`](docs/settlement-finalization.md) for the finalization/recovery contract.
+
+Canalis never invents transaction signatures. Explorer links are emitted only when genuine transaction evidence is persisted.
+
+## Architecture
 
 ```text
-provider payout + payer refund = provider channel ceiling
+apps/web/            Next.js public product + operator control plane
+packages/application schemas, services, settings, operations contracts
+packages/core/       task policy + route orchestration
+packages/providers/  deterministic + x402 + MPP adapters
+packages/persistence Postgres repositories and migrations
+packages/solana/     vouchers, signatures, live x402 channel/finalization boundary
+examples/            focused protocol/channel proofs
+docs/                architecture, product proof, settlement documentation
 ```
 
-Once all routes are terminal:
-
-```text
-provider payouts + recovered funds = original task budget
-```
-
-Canalis does **not** deploy a replacement payment-channel contract. The innovation is the orchestration layer above the primitive: task policy, multi-provider routing, protocol adapters, cumulative accounting, receipts, finalization, recovery, and a persistent operator control plane.
-
-## What is implemented
-
-- **Persistent task workspace** — wallet-scoped tasks survive refreshes and deployments, with search, filters, draft/active lifecycle, duplication, reruns, and task-level detail views.
-- **Provider Registry** — wallet-scoped provider configuration for deterministic, x402, and MPP services with endpoint, payee, asset/network constraints, pricing, channel ceilings, status, health history, and usage.
-- **Provider safety controls** — disabled, unhealthy, foreign-wallet, mode-incompatible, or runtime-unavailable providers are blocked at task creation, activation, rerun, and execution boundaries.
-- **Server-side provider credentials** — optional bearer/API-key credentials are encrypted at rest with AES-256-GCM, masked in the UI, and never returned by registry APIs.
-- **Protocol-aware health verification** — x402 endpoints must expose a valid `402` payment challenge; MPP endpoints must expose a valid Payment challenge; advertised assets/networks are checked against registry constraints.
-- **Task budgets and policy engine** — total ceiling, provider allowlist, per-call cap, provider cap, expiry, and stable rejection codes.
-- **Multi-provider route orchestration** — one logical task across Search, Data, Inference, or protocol-backed providers.
-- **Canonical voucher primitives** — exact 50-byte Solana payment-channel voucher encoding, Ed25519 signing, monotonicity, expiry, and ceiling checks.
-- **x402 integration** — `upto` / `exact` HTTP payment challenges mapped into Canalis policy and receipts.
-- **MPP integration boundary** — charge and metered-session semantics share the same provider contract; external execution remains gated until a non-custodial signer/session runtime is connected.
-- **Payment graph** — price, cumulative authorization, payment reference, output hash, protocol metadata, rejection/failure state.
-- **Channels workspace and finalization coordinator** — live channel status, settle/seal, distribution, payer recovery, explorer links, reconciliation, and retry-safe partial-failure paths.
-
-The built-in deterministic provider mode is a reference execution path, not a fake blockchain path: Canalis never fabricates transaction signatures. Live transaction links appear only when genuine settlement evidence exists. External x402/MPP providers can be configured and protocol-verified without code changes; Canalis will not activate them for autonomous spending until the deployment has the required non-custodial signer/session runtime.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/AGENTIC_PAYMENTS.md`](docs/AGENTIC_PAYMENTS.md) for the deeper design.
 
 ## Quickstart
 
-Requirements: **Node.js 22+** and **pnpm 10.17.1**.
+Requirements: **Node.js 22+**, **pnpm 10.17.1**, and Postgres for durable product flows.
 
 ```bash
 git clone https://github.com/EcstaceeLOR/Canalis.git
 cd Canalis
 cp .env.example .env
 pnpm install --no-frozen-lockfile
+pnpm db:migrate
 pnpm judge:check
 pnpm dev
 ```
 
 Open `http://localhost:3000`.
 
-`pnpm judge:check` performs the complete submission gate: workspace build, unit/integration/adversarial tests, TypeScript validation, and committed-secret scanning.
+`pnpm judge:check` runs the production build/tests, TypeScript validation, responsive/accessibility contracts, public-product/onboarding metadata contracts, and committed-secret scanning.
 
-## Judge path
+## Production URL and release metadata
 
-The reproducible under-three-minute Colosseum walkthrough is in [`docs/JUDGE_DEMO.md`](docs/JUDGE_DEMO.md).
+The canonical product URL is **https://canalis-sigma.vercel.app**. Public metadata, sitemap, health responses, repository homepage, and this README all use that one stable project-level production alias rather than preview/branch deployment URLs.
 
-Default judge configuration:
+`GET /api/health` returns the current web release metadata, Vercel commit/environment information when available, and whether durable storage is configured. It does not expose connection strings, credentials, signing material, or provider secrets.
 
-| Setting | Value |
-| --- | ---: |
-| Budget | `1.00 USDC` |
-| Max / call | `0.25 USDC` |
-| Search | `0.05 USDC` |
-| Data | `0.03 USDC` |
-| Inference | `0.12 USDC` |
-| Authorized spend | `0.20 USDC` |
-| Recoverable | `0.80 USDC` |
-
-## Architecture
+Optional deployment configuration:
 
 ```text
-Agent owner
-    |
-    v
-+--------------------+       +--------------------+
-| Task + budget      |------>| Policy engine      |
-| one global ceiling |       | caps / allowlists  |
-+---------+----------+       +--------------------+
-          |
-          v
-+--------------------+       +--------------------+
-| Route orchestrator |------>| Provider Registry  |
-| payment graph      |       | demo / x402 / MPP  |
-+---------+----------+       +--------------------+
-          |                           |
-          |                           v
-          |                  protocol health + metadata
-          v
-+--------------------------------------------------+
-| Solana payment-channel boundary                  |
-| voucher -> settle/seal -> distribute -> recovery |
-+--------------------------------------------------+
+CANALIS_SITE_URL=https://canalis-sigma.vercel.app
+CANALIS_RELEASE_VERSION=<human-readable release label>
 ```
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/AGENTIC_PAYMENTS.md`](docs/AGENTIC_PAYMENTS.md), and [`docs/settlement-finalization.md`](docs/settlement-finalization.md) for the implementation contracts.
+Vercel uses **Root Directory = `apps/web`**. Durable production operation requires `DATABASE_URL`; saved provider credentials additionally require `CANALIS_PROVIDER_SECRET_KEY`. Private keys and signer/session material stay outside the repository.
 
-## Repository map
+## Security and reliability
 
-```text
-apps/web/          Next.js control-plane dashboard
-packages/core/     task policy + route orchestration
-packages/providers demo + x402 + MPP provider adapters
-packages/solana/   vouchers + signatures + finalization boundary
-examples/          protocol/channel spikes
-docs/              architecture and judge proof
-```
+Production hardening includes:
 
-The repository intentionally contains **one CI workflow** and no Kubernetes, Terraform, Helm, or unrelated platform scaffolding. The engineering signal stays focused on the product primitive and its operator experience.
-
-## Security and accounting guarantees
-
-Automated tests cover:
-
-- non-positive payment rejection,
-- provider allowlists and per-call caps,
-- provider and total-budget exhaustion,
-- provider ownership, status, health, and protocol constraints,
-- provider credential masking and wallet-scoped persistence,
-- non-monotonic/replayed cumulative amounts,
-- quote/voucher delta mismatch,
-- channel-ceiling overflow,
-- wrong-mint rejection before fulfillment,
-- downstream failure after authorization without unsafe accounting rollback,
-- exact u64/i64 voucher boundaries,
-- settlement payout/refund reconciliation,
-- distribution and settlement retry paths,
-- committed private-key/seed material scanning.
-
-Signers are injected at the wallet/runtime boundary. Canalis does not load or commit wallet private keys. Provider API credentials require `CANALIS_PROVIDER_SECRET_KEY` and are encrypted before persistence.
-
-## Deployment
-
-The dashboard is live on Vercel: **[canalis-git-deploy-web-standalone-demola-codes.vercel.app](https://canalis-git-deploy-web-standalone-demola-codes.vercel.app)**.
-
-Vercel uses **Root Directory = `apps/web`**. The web app is deployment-self-contained while the canonical Canalis core, provider, persistence, and Solana packages remain in the repository for development, testing, and the live payment-channel proof.
-
-Copy environment names from [`.env.example`](.env.example). Durable product operation requires `DATABASE_URL`. Saving provider credentials also requires `CANALIS_PROVIDER_SECRET_KEY`. Live x402/MPP/Solana signers must be injected outside the repository.
+- wallet ownership checks for user-scoped resources,
+- centralized schema validation,
+- idempotency for critical mutation paths,
+- append-only audit events,
+- rate limiting and secure response headers,
+- provider credential encryption with AES-256-GCM,
+- safe retry/finalization coordination,
+- no raw secret/stack-trace exposure to the browser,
+- committed-secret scanning,
+- adversarial tests around replay, duplicate settlement/recovery, stale state, and concurrent actions.
 
 ## Scope discipline
 
-Canalis stays focused on autonomous payment orchestration. It deliberately does not include:
-
-- a replacement payment-channel smart contract,
-- a general-purpose wallet,
-- a generic x402 marketplace,
-- custom blockchain infrastructure,
-- unrelated deployment/platform machinery.
-
-The goal is simple: make **bounded autonomous spending across many services** obvious, usable, verifiable, and Solana-native.
-
-## Status
+Canalis is the orchestration layer above payment primitives. It deliberately does not include a replacement payment-channel contract, a generic wallet, unrelated infrastructure scaffolding, or fake chain evidence.
 
 Built for **Colosseum Crypto World's Fair 2026 — Solana track**.
 
