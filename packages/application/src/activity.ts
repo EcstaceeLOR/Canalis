@@ -155,7 +155,8 @@ const descriptors: Partial<Record<ApplicationErrorCode, ProductErrorDescriptor>>
 };
 
 export function productErrorDescriptor(code: string | undefined): ProductErrorDescriptor {
-  if (code && code in descriptors) return descriptors[code as ApplicationErrorCode]!;
+  const descriptor = code ? descriptors[code as ApplicationErrorCode] : undefined;
+  if (descriptor) return descriptor;
   return {
     title: "Canalis needs attention",
     message: "The operation did not complete successfully.",
