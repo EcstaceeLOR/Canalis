@@ -46,15 +46,6 @@ async function main() {
   const payerTokenAccount = new PublicKey(
     await gateway.fundSandboxWallet(payerAddress, CEILING_ATOMIC),
   );
-  const providerTokenAccount = await getAssociatedTokenAddress(
-    mint,
-    new PublicKey(providerAddress),
-    false,
-    TOKEN_PROGRAM_ID,
-  );
-
-  const payerBefore = await tokenBalance(connection, payerTokenAccount);
-  const providerBefore = await tokenBalance(connection, providerTokenAccount);
 
   const taskId = `task_issue_28_live_proof_${Date.now()}`;
   const preparation = await gateway.prepareChannel({
@@ -66,6 +57,15 @@ async function main() {
   });
   const accepted = preparation.paymentRequired.accepts[0];
   if (!accepted) throw new Error("Prepared live channel has no accepted payment requirement.");
+
+  const providerTokenAccount = await getAssociatedTokenAddress(
+    mint,
+    new PublicKey(providerAddress),
+    false,
+    TOKEN_PROGRAM_ID,
+  );
+  const payerBefore = await tokenBalance(connection, payerTokenAccount);
+  const providerBefore = await tokenBalance(connection, providerTokenAccount);
 
   const payerSigner = await createKeyPairSignerFromBytes(payer.secretKey);
   const client = new x402Client();
