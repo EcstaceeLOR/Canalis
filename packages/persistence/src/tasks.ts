@@ -72,9 +72,9 @@ export class PostgresTaskWorkspaceRepository {
   }
 
   async listTasks(query: TaskListQuery): Promise<TaskListResult> {
-    const params: unknown[] = [query.owner];
+    const params: Array<string | number> = [query.owner];
     const clauses = ["t.owner = $1"];
-    const add = (value: unknown) => {
+    const add = (value: string | number) => {
       params.push(value);
       return `$${params.length}`;
     };
@@ -116,7 +116,7 @@ export class PostgresTaskWorkspaceRepository {
     );
     const total = Number(countRows[0]?.total ?? 0);
     const offset = (query.page - 1) * query.pageSize;
-    const selectParams = [...params, query.pageSize, offset];
+    const selectParams: Array<string | number> = [...params, query.pageSize, offset];
     const limitPlaceholder = `$${selectParams.length - 1}`;
     const offsetPlaceholder = `$${selectParams.length}`;
     const rows = await this.sql.unsafe<Record<string, unknown>[]>(
