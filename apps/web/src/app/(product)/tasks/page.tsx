@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "../../../components/product/page-header";
 import { LiveDevnetTaskCreator } from "../../../components/product/live-devnet-task-creator";
 import { TasksWorkspace } from "../../../components/product/tasks-workspace";
@@ -10,7 +11,8 @@ export default function TasksPage() {
       <PageHeader
         eyebrow="Workspace"
         title="Tasks"
-        description="Create, revisit, filter, and manage wallet-owned autonomous payment tasks. Every record below is persisted in Canalis rather than manufactured demo history."
+        description="Create, revisit, filter, and manage wallet-owned autonomous payment tasks. Use reusable policies when you want versioned guardrails and explicit per-task overrides."
+        actions={<Link className="secondary-action" href="/tasks/new">New policy-backed task <span>→</span></Link>}
       />
       <LiveDevnetTaskCreator />
       <TasksWorkspace />
