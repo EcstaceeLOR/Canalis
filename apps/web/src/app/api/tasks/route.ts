@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       maxPerCallUsd: input.maxPerCallUsd,
       expiryMinutes: input.expiryMinutes,
       allowedProviders: input.allowedProviders,
-      mode: "deterministic",
+      mode: input.mode,
       initialStatus: input.saveAsDraft ? "draft" : "active",
     });
     await repository.upsertMetadata({
