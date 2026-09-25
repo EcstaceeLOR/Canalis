@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { ProductEdgeGuards } from "../components/product/product-edge-guards";
 import "./globals.css";
 import "./design-system.css";
 import "./design-system-states.css";
@@ -17,5 +18,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en"><body><ProductEdgeGuards />{children}</body></html>;
 }
