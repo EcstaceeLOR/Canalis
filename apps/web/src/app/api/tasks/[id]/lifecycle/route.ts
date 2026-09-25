@@ -39,6 +39,8 @@ export async function POST(
       throw new ApplicationError("TASK_NOT_FOUND", "Task not found.", 404);
     }
 
+    const durationSeconds = BigInt(existing.task.expiresAtUnixSeconds) - BigInt(existing.task.createdAtUnixSeconds);
+
     if (action === "submit" || action === "cancel" || action === "archive") {
       const allowed = action === "submit"
         ? ["draft"]
@@ -47,11 +49,13 @@ export async function POST(
           : ["draft", "completed", "cancelled"];
       assertTransition(existing.task.status, allowed, action);
       const nextStatus = action === "submit" ? "active" : action === "cancel" ? "cancelled" : "archived";
+      const now = BigInt(Math.floor(Date.now() / 1000));
       await repository.setStatus(
         id,
         identity.walletAddress,
         nextStatus,
-        BigInt(Math.floor(Date.now() / 1000)),
+        now,
+        action === "submit" ? now + durationSeconds : undefined,
       );
       const task = await application.getTask(id);
       const nextWorkspace = await repository.getSummary(id, identity.walletAddress);
@@ -62,7 +66,6 @@ export async function POST(
       assertTransition(existing.task.status, ["completed", "cancelled", "archived"], action);
     }
 
-    const durationSeconds = BigInt(existing.task.expiresAtUnixSeconds) - BigInt(existing.task.createdAtUnixSeconds);
     const expiryMinutes = Math.max(1, Math.min(10_080, Number(durationSeconds / 60n)));
     const created = await application.createTask({
       owner: identity.walletAddress,
