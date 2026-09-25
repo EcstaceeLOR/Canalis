@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CanalisLogo } from "../brand/canalis-logo";
 import { useWalletIdentity, WalletAccountControl } from "../wallet/wallet-identity";
+import { NotificationCenter } from "./notification-center";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", glyph: "⌂" },
@@ -14,6 +15,7 @@ const navigation = [
   { href: "/transactions", label: "Transactions", glyph: "↗" },
   { href: "/policies", label: "Policies", glyph: "◇" },
   { href: "/analytics", label: "Analytics", glyph: "A" },
+  { href: "/activity", label: "Activity", glyph: "◉" },
   { href: "/settings", label: "Settings", glyph: "⚙" },
 ] as const;
 
@@ -164,6 +166,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <button className="command-trigger" type="button" onClick={() => setSearchOpen(true)}>
               <span>Search workspace</span><kbd>⌘ K</kbd>
             </button>
+            <NotificationCenter />
             <Link className="topbar-task-link" href="/tasks/new">New task</Link>
             <Link className="network-badge" href="/settings" title={`${runtime.environment} workspace · ${runtime.solanaNetwork}`}><i />{networkLabel(runtime)}</Link>
             <WalletAccountControl />
