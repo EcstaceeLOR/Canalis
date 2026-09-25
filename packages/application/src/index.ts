@@ -7,5 +7,6 @@ export * from "./policy-workspace.js";
 export * from "./provider-registry.js";
 export * from "./repository.js";
 export * from "./service.js";
+export * from "./settings.js";
 export * from "./task-workspace.js";
 export * from "./transactions.js";
