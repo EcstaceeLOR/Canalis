@@ -17,7 +17,8 @@
     "typecheck": "pnpm -r typecheck",
     "db:migrate": "pnpm --filter @canalis/persistence db:migrate",
     "security:check": "node scripts/check-secrets.mjs",
-    "judge:check": "pnpm test && pnpm typecheck && pnpm security:check",
+    "ux:check": "node scripts/check-ux-contracts.mjs",
+    "judge:check": "pnpm test && pnpm typecheck && pnpm ux:check && pnpm security:check",
     "dev": "pnpm --filter @canalis/web dev"
   },
   "devDependencies": {
