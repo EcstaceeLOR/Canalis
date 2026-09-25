@@ -11,6 +11,7 @@ const requireFile = (path) => {
 
 const shell = read("apps/web/src/components/product/app-shell.tsx");
 const ux = read("apps/web/src/components/product/product-ux.tsx");
+const edge = read("apps/web/src/components/product/product-edge-guards.tsx");
 const channels = read("apps/web/src/components/product/channels-workspace.tsx");
 const css = read("apps/web/src/app/production-ux.css");
 const loading = read("apps/web/src/app/(product)/loading.tsx");
@@ -34,13 +35,16 @@ requireText(ux, 'text.startsWith("finalize")', "UX runtime");
 requireText(ux, 'text.startsWith("recover")', "UX runtime");
 requireText(ux, 'text === "archive"', "UX runtime");
 requireText(ux, 'text === "disable"', "UX runtime");
-requireText(ux, 'text === "contain task"', "UX runtime");
 requireText(ux, 'event.key !== "Tab"', "UX runtime");
 requireText(ux, 'event.key === "Escape"', "UX runtime");
 
+requireText(edge, 'text(button) === "contain task"', "UX edge guards");
+requireText(edge, 'button.dataset.uxPending = "true"', "UX edge guards");
+requireText(edge, 'setAttribute("aria-busy", "true")', "UX edge guards");
+requireText(edge, "ConfirmDialog", "UX edge guards");
+
 requireText(channels, "networkLabel(channel.network)", "channels");
 requireText(channels, 'fetch("/api/providers"', "channels");
-requireText(channels, 'busyId === `${channel.taskId}:${channel.providerId}`', "channels");
 if (channels.includes("● Devnet") || channels.includes("cluster=devnet`;")) failures.push("channels: hard-coded devnet presentation returned");
 
 requireText(css, "[data-ux-table]", "production UX CSS");
