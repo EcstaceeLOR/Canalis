@@ -166,10 +166,18 @@ export class PostgresTaskWorkspaceRepository {
     return rows[0]?.status ?? null;
   }
 
-  async setStatus(taskId: string, owner: string, status: TaskStatus, updatedAtUnixSeconds: bigint): Promise<boolean> {
+  async setStatus(
+    taskId: string,
+    owner: string,
+    status: TaskStatus,
+    updatedAtUnixSeconds: bigint,
+    expiresAtUnixSeconds?: bigint,
+  ): Promise<boolean> {
     const rows = await this.sql<{ id: string }[]>`
       UPDATE tasks
-      SET status = ${status}, updated_at_unix = ${updatedAtUnixSeconds.toString()}
+      SET status = ${status},
+          updated_at_unix = ${updatedAtUnixSeconds.toString()},
+          expires_at_unix = COALESCE(${expiresAtUnixSeconds?.toString() ?? null}, expires_at_unix)
       WHERE id = ${taskId} AND owner = ${owner}
       RETURNING id
     `;
