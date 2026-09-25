@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { parseProviderRegistryCreate } from "@canalis/application";
+import { parseProviderRegistryCreate, type ProviderMode } from "@canalis/application";
 import { apiErrorResponse, readJsonBody } from "../../../server/api";
 import { requireWalletSession } from "../../../server/auth";
+import { providerRuntimeReady } from "../../../server/provider-selection";
 import { sealProviderCredential } from "../../../server/provider-secrets";
 import { getProviderRegistryRepository } from "../../../server/providers";
+
+const executionModes: ProviderMode[] = ["deterministic", "x402", "mpp"];
 
 export async function GET(request: Request) {
   try {
@@ -12,7 +15,12 @@ export async function GET(request: Request) {
     const selectableOnly = url.searchParams.get("selectable") === "1";
     const repository = await getProviderRegistryRepository();
     const providers = await repository.listProviders(identity.walletAddress, selectableOnly);
-    return NextResponse.json({ providers });
+    return NextResponse.json({
+      providers: providers.map((provider) => ({
+        ...provider,
+        executionModes: executionModes.filter((mode) => providerRuntimeReady(provider, mode)),
+      })),
+    });
   } catch (error) {
     return apiErrorResponse(error);
   }
