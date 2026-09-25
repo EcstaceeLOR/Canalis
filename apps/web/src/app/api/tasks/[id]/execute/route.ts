@@ -16,7 +16,7 @@ export async function POST(
       request,
       ownerWallet: identity.walletAddress,
       operation: "task.execute",
-      resourceKey: `task:${id}:execution`,
+      resourceKey: `task:${id}:mutation`,
       handler: async () => {
         const application = await getCanalisApplication();
         const existing = await application.getTask(id);
