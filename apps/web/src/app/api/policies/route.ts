@@ -3,6 +3,7 @@ import { parseReusablePolicyCreate } from "@canalis/application";
 import { apiErrorResponse, readJsonBody } from "../../../server/api";
 import { requireWalletSession } from "../../../server/auth";
 import { getPolicyRepository } from "../../../server/policies";
+import { assertPolicyProvidersExist } from "../../../server/policy-validation";
 
 export async function GET(request: Request) {
   try {
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
   try {
     const identity = await requireWalletSession(request);
     const input = parseReusablePolicyCreate(await readJsonBody(request));
+    await assertPolicyProvidersExist(identity.walletAddress, input.rules);
     const repository = await getPolicyRepository();
     const policy = await repository.create(identity.walletAddress, input.name, input.description, input.rules);
     return NextResponse.json({ policy }, { status: 201 });
