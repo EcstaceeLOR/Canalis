@@ -23,6 +23,11 @@ function savedPayload(channel: TaskDetailDto["channels"][number]): PaymentPayloa
   return payload;
 }
 
+function recoveryStage(channel: TaskDetailDto["channels"][number]) {
+  const value = channel.recoveryState?.stage;
+  return typeof value === "string" ? value : "";
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -52,17 +57,73 @@ export async function POST(
         results.push({ providerId: current.providerId, status: current.status, idempotent: true });
         continue;
       }
-      if (current.status !== "open" && current.status !== "failed") {
+
+      const stage = recoveryStage(current);
+      if (
+        current.status === "failed" ||
+        ["finalization-started", "finalization-ambiguous"].includes(stage)
+      ) {
+        partial = true;
+        results.push({
+          providerId: current.providerId,
+          status: current.status,
+          recoveryRequired: true,
+          error: "A previous terminal attempt may have reached Solana. Automatic rebroadcast is blocked until the channel is reconciled.",
+        });
+        continue;
+      }
+
+      if (current.status !== "open") {
         partial = true;
         results.push({ providerId: current.providerId, status: current.status, error: "Channel is not open." });
         continue;
       }
 
+      let paymentRequired;
+      let paymentPayload: PaymentPayload;
+      let settledAtomic: bigint;
       try {
-        const paymentRequired = paymentRequiredFromChannel(current);
-        const paymentPayload = savedPayload(current);
-        const settledAtomic = BigInt(current.cumulativeAuthorizedAtomic);
-        const result = await gateway.claim(paymentPayload, paymentRequired.accepts[0], settledAtomic);
+        paymentRequired = paymentRequiredFromChannel(current);
+        paymentPayload = savedPayload(current);
+        settledAtomic = BigInt(current.cumulativeAuthorizedAtomic);
+      } catch (caught) {
+        partial = true;
+        results.push({
+          providerId: current.providerId,
+          status: current.status,
+          error: caught instanceof Error ? caught.message : "Channel finalization evidence is invalid.",
+        });
+        continue;
+      }
+
+      const lease = await settlements.beginFinalization({
+        taskId: id,
+        providerId: current.providerId,
+        cumulativeAmountAtomic: settledAtomic,
+        startedAtUnixSeconds: BigInt(Math.floor(Date.now() / 1000)),
+      });
+      if (lease !== "acquired") {
+        partial = true;
+        results.push({
+          providerId: current.providerId,
+          status: current.status,
+          recoveryRequired: lease === "busy",
+          idempotent: lease === "terminal",
+          error: lease === "busy"
+            ? "Another or previous finalization attempt owns this channel. Automatic rebroadcast is blocked."
+            : lease === "terminal"
+              ? undefined
+              : `Channel cannot begin finalization from its current state (${lease}).`,
+        });
+        continue;
+      }
+
+      try {
+        const result = await gateway.claim(
+          paymentPayload,
+          paymentRequired.accepts[0],
+          settledAtomic,
+        );
         const refundedAtomic = BigInt(result.refundedAtomic);
         const status = settledAtomic === 0n ? "recovered" : "distributed";
         task = await application.recordChannelState(id, current.providerId, {
@@ -92,11 +153,17 @@ export async function POST(
           status: "failed",
           recoveryState: {
             ...(current.recoveryState ?? {}),
-            stage: "finalization-failed",
+            stage: "finalization-ambiguous",
+            automaticRetryBlocked: true,
             error: errorMessage,
           },
         });
-        results.push({ providerId: current.providerId, status: "failed", error: errorMessage });
+        results.push({
+          providerId: current.providerId,
+          status: "failed",
+          recoveryRequired: true,
+          error: errorMessage,
+        });
       }
     }
 
