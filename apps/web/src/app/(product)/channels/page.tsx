@@ -1,12 +1,17 @@
-import { MetricCard, PageHeader, SectionHeader } from "../../../components/product/page-header";
-import { devnetProof, explorerAddress, explorerTx, shortAddress } from "../../../lib/product-reference";
+import { PageHeader } from "../../../components/product/page-header";
+import { ChannelsWorkspace } from "../../../components/product/channels-workspace";
 
 export const metadata = { title: "Channels" };
 
 export default function ChannelsPage() {
-  return <div className="page-stack"><PageHeader eyebrow="Settlement" title="Channels" description="Inspect payment-channel state and verified settlement evidence. Live user-managed channels will appear here when application lifecycle wiring lands." />
-    <section className="metric-row"><MetricCard label="Verified channels" value="1" detail="Canonical devnet proof" tone="positive" /><MetricCard label="Channel ceiling" value="100,000" detail="Proof-mint atomic units" /><MetricCard label="Settled" value="30,000" detail="Provider payout" tone="brand" /><MetricCard label="Recovered" value="70,000" detail="Returned to payer" tone="positive" /></section>
-    <section className="product-card table-card"><SectionHeader title="Reference channel" detail="Real Solana devnet evidence — not simulated UI state" /><div className="channel-detail-grid"><div><span>Channel PDA</span><strong>{shortAddress(devnetProof.channel, 12, 10)}</strong><a href={explorerAddress(devnetProof.channel)} target="_blank" rel="noreferrer">Open address ↗</a></div><div><span>Payer</span><strong>{shortAddress(devnetProof.payer, 12, 10)}</strong></div><div><span>Provider</span><strong>{shortAddress(devnetProof.provider, 12, 10)}</strong></div><div><span>Status</span><strong className="success-text">Settled & reconciled</strong></div></div><div className="channel-accounting"><div><span>100,000</span><small>Deposited ceiling</small></div><b>=</b><div><span>30,000</span><small>Provider settlement</small></div><b>+</b><div className="recovered"><span>70,000</span><small>Payer recovery</small></div></div></section>
-    <section className="product-card"><SectionHeader title="On-chain evidence" detail={`GitHub Actions proof run ${devnetProof.runId}`} /><div className="transaction-evidence"><a href={explorerTx(devnetProof.openSignature)} target="_blank" rel="noreferrer"><span className="tx-type">OPEN</span><div><strong>Channel open + 100,000-unit deposit</strong><small>{shortAddress(devnetProof.openSignature, 14, 12)}</small></div><b>↗</b></a><a href={explorerTx(devnetProof.settleSignature)} target="_blank" rel="noreferrer"><span className="tx-type settled">SETTLE</span><div><strong>30,000-unit claim + recovery</strong><small>{shortAddress(devnetProof.settleSignature, 14, 12)}</small></div><b>↗</b></a></div></section>
-  </div>;
+  return (
+    <div className="page-stack">
+      <PageHeader
+        eyebrow="Settlement operations"
+        title="Channels"
+        description="Monitor every wallet-owned payment channel, reconcile authorized spend against recoverable escrow, and perform only state-safe terminal actions against real Solana evidence."
+      />
+      <ChannelsWorkspace />
+    </div>
+  );
 }
