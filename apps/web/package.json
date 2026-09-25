@@ -15,6 +15,7 @@
   "dependencies": {
     "@canalis/application": "0.0.1",
     "@canalis/persistence": "0.0.1",
+    "@canalis/providers": "0.0.1",
     "@canalis/solana": "0.0.1",
     "@solana/kit": "^6.1.0",
     "@wallet-standard/app": "^1.1.1",
