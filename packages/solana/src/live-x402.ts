@@ -117,6 +117,17 @@ function payloadField(payload: PaymentPayload, key: string): string {
   return value;
 }
 
+function payloadUnixSeconds(payload: PaymentPayload, key: string): string {
+  const value = payload.payload[key];
+  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
+    return String(value);
+  }
+  if (typeof value === "string" && /^[1-9]\d*$/.test(value)) {
+    return value;
+  }
+  throw new Error(`Payment payload is missing or has invalid ${key}.`);
+}
+
 export function validateLivePaymentPayload(paymentPayload: PaymentPayload, requirements: PaymentRequirements, expectedPayer: string): void {
   if (paymentPayload.x402Version !== 2) throw new Error("Only x402 v2 live channels are supported.");
   if (payloadField(paymentPayload, "from") !== expectedPayer) throw new Error("Payment payload payer does not match the authenticated wallet.");
@@ -211,7 +222,7 @@ export class DevnetX402ChannelGateway {
     await this.initialize();
     validateLivePaymentPayload(paymentPayload, requirements, expectedPayer);
     const channelId = payloadField(paymentPayload, "channelId");
-    const expiresAt = payloadField(paymentPayload, "expiresAt");
+    const expiresAt = payloadUnixSeconds(paymentPayload, "expiresAt");
     const result = await this.settleWithSafeRetry({ ...paymentPayload, payload: { ...paymentPayload.payload, type: "deposit" } }, requirements);
     return { channelId, transactionSignature: settlementTransaction(result), expiresAtUnixSeconds: expiresAt, paymentPayload };
   }
