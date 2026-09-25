@@ -34,11 +34,13 @@ requireText(ux, 'text.startsWith("finalize")', "UX runtime");
 requireText(ux, 'text.startsWith("recover")', "UX runtime");
 requireText(ux, 'text === "archive"', "UX runtime");
 requireText(ux, 'text === "disable"', "UX runtime");
-requireText(ux, 'event.key === "Tab"', "UX runtime");
+requireText(ux, 'text === "contain task"', "UX runtime");
+requireText(ux, 'event.key !== "Tab"', "UX runtime");
 requireText(ux, 'event.key === "Escape"', "UX runtime");
 
 requireText(channels, "networkLabel(channel.network)", "channels");
 requireText(channels, 'fetch("/api/providers"', "channels");
+requireText(channels, 'busyId === `${channel.taskId}:${channel.providerId}`', "channels");
 if (channels.includes("● Devnet") || channels.includes("cluster=devnet`;")) failures.push("channels: hard-coded devnet presentation returned");
 
 requireText(css, "[data-ux-table]", "production UX CSS");
