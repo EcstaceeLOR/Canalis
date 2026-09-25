@@ -7,12 +7,16 @@ import {
 } from "@canalis/core";
 import {
   demoProviders,
+  type ProviderAdapter,
   type ProviderRequest,
   type ProviderReceipt,
 } from "@canalis/providers";
 import {
+  CANALIS_DEVNET_SANDBOX_MINT,
+  CANALIS_LIVE_SANDBOX_MAX_TASK_ATOMIC,
   PAYMENT_CHANNELS_PROGRAM_ADDRESS,
   SOLANA_DEVNET_CAIP2,
+  liveProviderAddress,
 } from "@canalis/solana";
 import {
   parseCreateTaskRequest,
@@ -72,6 +76,37 @@ function deterministicRequest(providerId: DeterministicProviderId): ProviderRequ
   };
 }
 
+function liveProviders(mint: string): Record<string, ProviderAdapter<any, any>> {
+  return Object.fromEntries(
+    Object.entries(demoProviders).map(([providerId, provider]) => [
+      providerId,
+      {
+        metadata: {
+          ...provider.metadata,
+          payee: liveProviderAddress(providerId),
+          protocol: "x402" as const,
+          description: `${provider.metadata.description} Metered through a live Solana devnet payment channel.`,
+        },
+        async quote(request: ProviderRequest<any>) {
+          const quote = await provider.quote(request as never);
+          return {
+            ...quote,
+            mint,
+            protocol: "x402" as const,
+            protocolMetadata: {
+              scheme: "upto",
+              network: SOLANA_DEVNET_CAIP2,
+            },
+          };
+        },
+        async fulfillAuthorized(request: ProviderRequest<any>, quote: any, authorization: any) {
+          return provider.fulfillAuthorized(request as never, quote, authorization);
+        },
+      } satisfies ProviderAdapter<any, any>,
+    ]),
+  );
+}
+
 function serializeReceipt(receipt: ProviderReceipt): SerializedReceipt {
   return {
     providerId: receipt.providerId,
@@ -129,6 +164,13 @@ export class CanalisApplication {
         400,
       );
     }
+    if (parsed.mode === "x402" && budgetAtomic > CANALIS_LIVE_SANDBOX_MAX_TASK_ATOMIC) {
+      throw new ApplicationError(
+        "LIVE_SANDBOX_BUDGET_EXCEEDED",
+        "Live devnet sandbox tasks are capped at 5 test USDC.",
+        400,
+      );
+    }
 
     const now = this.nowUnixSeconds();
     const reservations = allocateReservations(budgetAtomic, parsed.allowedProviders);
@@ -143,7 +185,10 @@ export class CanalisApplication {
       id: `task_${randomUUID()}`,
       owner: parsed.owner,
       agentId: parsed.agentId,
-      budget: { mint: "USDC", totalAtomic: budgetAtomic },
+      budget: {
+        mint: parsed.mode === "x402" ? CANALIS_DEVNET_SANDBOX_MINT : "USDC",
+        totalAtomic: budgetAtomic,
+      },
       policy: {
         allowedProviderIds: parsed.allowedProviders,
         maxPerCallAtomic,
@@ -175,10 +220,10 @@ export class CanalisApplication {
 
   async executeTask(taskId: string): Promise<TaskDetailDto> {
     const task = await this.requireTask(taskId);
-    if (task.mode !== "deterministic") {
+    if (task.mode !== "deterministic" && task.mode !== "x402") {
       throw new ApplicationError(
         "PROVIDER_MODE_UNSUPPORTED",
-        `Task mode ${task.mode} is not executable by the deterministic runner.`,
+        `Task mode ${task.mode} is not executable by the current Canalis runner.`,
         409,
       );
     }
@@ -200,14 +245,25 @@ export class CanalisApplication {
     }
 
     const channels = await this.repository.getChannels(task.id);
+    if (task.mode === "x402") {
+      const unopened = channels.filter((channel) => channel.status !== "open");
+      if (unopened.length > 0) {
+        throw new ApplicationError(
+          "LIVE_CHANNELS_NOT_OPEN",
+          `Open every live provider channel before execution. Pending: ${unopened.map((channel) => channel.providerId).join(", ")}.`,
+          409,
+        );
+      }
+    }
+
     const reservations: ChannelReservation[] = channels.map((channel) => ({
       providerId: channel.providerId,
       ceilingAtomic: channel.ceilingAtomic,
     }));
-
+    const providers = task.mode === "x402" ? liveProviders(task.budget.mint) : demoProviders;
     const orchestrator = new CanalisRouteOrchestrator(
       task,
-      demoProviders,
+      providers,
       reservations,
       this.nowUnixSeconds,
     );
