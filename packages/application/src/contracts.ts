@@ -12,9 +12,6 @@ export type JsonValue =
   | null
   | JsonValue[]
   | { [key: string]: JsonValue };
-// JSONB decoding is runtime-validated by Postgres. Keep the object boundary
-// permissive enough for database-driver output while retaining JsonValue for
-// callers that construct metadata in application code.
 export type JsonObject = Record<string, any>;
 
 const moneySchema = z
@@ -33,7 +30,7 @@ export const createTaskRequestSchema = z
       .min(1)
       .max(deterministicProviderIds.length)
       .default([...deterministicProviderIds]),
-    mode: z.literal("deterministic").default("deterministic"),
+    mode: z.enum(["deterministic", "x402"]).default("deterministic"),
     initialStatus: z.enum(["draft", "active"]).default("active"),
     expiryMinutes: z.coerce.number().int().min(1).max(10_080).default(15),
   })

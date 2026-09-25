@@ -21,6 +21,7 @@ export const taskWorkspaceCreateSchema = z.object({
     .max(deterministicProviderIds.length)
     .default([...deterministicProviderIds]),
   policyId: z.string().trim().min(1).max(80).default("inline-bounded"),
+  mode: z.enum(["deterministic", "x402"]).default("deterministic"),
   saveAsDraft: z.boolean().default(false),
 }).strict();
 

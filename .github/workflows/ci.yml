@@ -40,7 +40,9 @@ jobs:
       - run: pnpm security:check
 
   devnet-proof:
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.head_ref == 'issue-28-live-solana-channels')
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 12
@@ -53,14 +55,26 @@ jobs:
         with:
           node-version: 22
       - run: pnpm install --no-frozen-lockfile
-      - name: Prove Solana payment-channel lifecycle on devnet
+      - name: Prove original Solana payment-channel lifecycle on devnet
+        if: github.event_name == 'workflow_dispatch'
         run: pnpm --filter @canalis/channel-spike devnet:proof
         env:
           SVM_RPC_URL: https://api.devnet.solana.com
-      - name: Upload devnet proof artifact
-        if: success()
+      - name: Prove live Canalis product channel lifecycle on devnet
+        run: pnpm --filter @canalis/solana devnet:product-proof
+        env:
+          SVM_RPC_URL: https://api.devnet.solana.com
+      - name: Upload original devnet proof artifact
+        if: github.event_name == 'workflow_dispatch' && success()
         uses: actions/upload-artifact@v4
         with:
           name: canalis-devnet-payment-channel-proof
           path: examples/channel-spike/devnet-proof.json
+          if-no-files-found: error
+      - name: Upload live product devnet proof artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canalis-live-product-channel-proof
+          path: packages/solana/product-devnet-proof.json
           if-no-files-found: error
