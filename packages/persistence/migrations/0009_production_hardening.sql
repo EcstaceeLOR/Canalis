@@ -66,7 +66,7 @@ BEGIN
   END IF;
 
   IF table_name = 'providers' THEN
-    RETURN snapshot - 'secret_config' - 'config';
+    RETURN snapshot - 'secret_config' - 'config' - 'last_error_message';
   END IF;
 
   IF table_name = 'channels' THEN
