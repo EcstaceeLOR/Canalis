@@ -1,6 +1,7 @@
 import {
   ApplicationError,
   CanalisApplication,
+  ProviderRegistry,
 } from "@canalis/application";
 import {
   migrateDatabase,
@@ -9,6 +10,7 @@ import {
 
 let repository: PostgresCanalisRepository | undefined;
 let application: CanalisApplication | undefined;
+let providerRegistry: ProviderRegistry | undefined;
 let initialization: Promise<CanalisApplication> | undefined;
 
 export async function getCanalisApplication(): Promise<CanalisApplication> {
@@ -28,6 +30,7 @@ export async function getCanalisApplication(): Promise<CanalisApplication> {
       await migrateDatabase(databaseUrl);
       repository = new PostgresCanalisRepository(databaseUrl);
       application = new CanalisApplication(repository);
+      providerRegistry = new ProviderRegistry(repository);
       return application;
     })().catch((error) => {
       initialization = undefined;
@@ -36,6 +39,18 @@ export async function getCanalisApplication(): Promise<CanalisApplication> {
   }
 
   return initialization;
+}
+
+export async function getProviderRegistry(): Promise<ProviderRegistry> {
+  await getCanalisApplication();
+  if (!providerRegistry) {
+    throw new ApplicationError(
+      "STORAGE_NOT_CONFIGURED",
+      "Canalis provider registry is not initialized.",
+      503,
+    );
+  }
+  return providerRegistry;
 }
 
 export async function resetCanalisApplicationForTests(): Promise<void> {
@@ -49,5 +64,6 @@ export async function resetCanalisApplicationForTests(): Promise<void> {
   if (repository) await repository.close();
   repository = undefined;
   application = undefined;
+  providerRegistry = undefined;
   initialization = undefined;
 }
