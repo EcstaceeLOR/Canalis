@@ -243,13 +243,7 @@ export class PostgresProviderRegistryRepository {
           secret_config = ${secretConfig ? this.sql.json(secretConfig) : null},
           credential_kind = ${credentialKind},
           credential_header_name = ${credentialHeaderName},
-          health_status = CASE
-            WHEN endpoint IS DISTINCT FROM ${endpoint ?? null}
-              OR supported_networks IS DISTINCT FROM ${this.sql.json(networks)}
-              OR supported_assets IS DISTINCT FROM ${this.sql.json(assets)}
-            THEN 'unknown'
-            ELSE health_status
-          END,
+          health_status = CASE WHEN protocol = 'demo' THEN health_status ELSE 'unknown' END,
           updated_at = NOW()
       WHERE id = ${providerId} AND is_system = FALSE AND owner_wallet = ${ownerWallet}
     `;
@@ -286,11 +280,11 @@ export class PostgresProviderRegistryRepository {
     const rows = await this.sql<{ id: string }[]>`
       UPDATE providers
       SET health_status = ${result.status},
-          last_health_check_at_unix = ${checked},
-          last_success_at_unix = CASE WHEN ${result.status} = 'healthy' THEN ${checked} ELSE last_success_at_unix END,
-          last_error_at_unix = CASE WHEN ${result.status} = 'unhealthy' THEN ${checked} ELSE NULL END,
-          last_error_code = CASE WHEN ${result.status} = 'unhealthy' THEN ${result.code ?? "PROVIDER_HEALTH_FAILED"} ELSE NULL END,
-          last_error_message = CASE WHEN ${result.status} = 'unhealthy' THEN ${result.message} ELSE NULL END,
+          last_health_check_at_unix = ${checked}::bigint,
+          last_success_at_unix = CASE WHEN ${result.status} = 'healthy' THEN ${checked}::bigint ELSE last_success_at_unix END,
+          last_error_at_unix = CASE WHEN ${result.status} = 'unhealthy' THEN ${checked}::bigint ELSE NULL::bigint END,
+          last_error_code = CASE WHEN ${result.status} = 'unhealthy' THEN ${result.code ?? "PROVIDER_HEALTH_FAILED"} ELSE NULL::text END,
+          last_error_message = CASE WHEN ${result.status} = 'unhealthy' THEN ${result.message} ELSE NULL::text END,
           updated_at = NOW()
       WHERE id = ${providerId} AND (is_system = TRUE OR owner_wallet = ${ownerWallet})
       RETURNING id
