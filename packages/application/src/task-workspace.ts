@@ -7,6 +7,12 @@ const money = z
   .string()
   .trim()
   .regex(/^(0|[1-9]\d*)(\.\d{1,6})?$/, "Use a non-negative USDC amount with at most 6 decimals.");
+const providerId = z
+  .string()
+  .trim()
+  .min(2)
+  .max(64)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use a registered provider id.");
 
 export const taskWorkspaceCreateSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -16,9 +22,9 @@ export const taskWorkspaceCreateSchema = z.object({
   maxPerCallUsd: money.default("0.25"),
   expiryMinutes: z.coerce.number().int().min(1).max(10_080).default(60),
   allowedProviders: z
-    .array(z.enum(deterministicProviderIds))
+    .array(providerId)
     .min(1)
-    .max(deterministicProviderIds.length)
+    .max(12)
     .default([...deterministicProviderIds]),
   policyId: z.string().trim().min(1).max(80).default("inline-bounded"),
   mode: z.enum(["deterministic", "x402"]).default("deterministic"),
@@ -107,7 +113,7 @@ export function parseTaskListQuery(url: URL, owner: string): TaskListQuery {
   const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1);
   const pageSize = Math.max(1, Math.min(50, Number.parseInt(url.searchParams.get("pageSize") ?? "20", 10) || 20));
   const search = url.searchParams.get("q")?.trim().slice(0, 120) || undefined;
-  const providerId = url.searchParams.get("provider")?.trim() || undefined;
+  const provider = url.searchParams.get("provider")?.trim() || undefined;
   const statuses = (url.searchParams.get("status") ?? "")
     .split(",")
     .map((value) => value.trim())
@@ -131,7 +137,7 @@ export function parseTaskListQuery(url: URL, owner: string): TaskListQuery {
     owner,
     ...(search ? { search } : {}),
     ...(statuses.length ? { statuses } : {}),
-    ...(providerId ? { providerId } : {}),
+    ...(provider ? { providerId: provider } : {}),
     ...(parseTime(fromRaw) !== undefined ? { createdFromUnixSeconds: parseTime(fromRaw) } : {}),
     ...(parseTime(toRaw) !== undefined ? { createdToUnixSeconds: parseTime(toRaw) } : {}),
     sort,
