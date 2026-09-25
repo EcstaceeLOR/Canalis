@@ -10,7 +10,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "devnet:product-proof": "npm run build && node scripts/product-devnet-proof.mjs"
   },
   "dependencies": {
     "@solana/kit": "^6.1.0",
