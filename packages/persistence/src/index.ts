@@ -12,3 +12,4 @@ export * from "./security.js";
 export * from "./settings.js";
 export * from "./tasks.js";
 export * from "./transactions.js";
+export * from "./workspaces.js";

@@ -12,3 +12,4 @@ export * from "./service.js";
 export * from "./settings.js";
 export * from "./task-workspace.js";
 export * from "./transactions.js";
+export * from "./workspace.js";

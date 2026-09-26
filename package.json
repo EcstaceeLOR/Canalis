@@ -20,7 +20,8 @@
     "ux:check": "node scripts/check-ux-contracts.mjs",
     "public:check": "node scripts/check-public-product.mjs",
     "developer:check": "node scripts/check-developer-platform.mjs",
-    "judge:check": "pnpm test && pnpm typecheck && pnpm ux:check && pnpm public:check && pnpm developer:check && pnpm security:check",
+    "workspace:check": "node scripts/check-team-workspaces.mjs",
+    "judge:check": "pnpm test && pnpm typecheck && pnpm ux:check && pnpm public:check && pnpm developer:check && pnpm workspace:check && pnpm security:check",
     "dev": "pnpm --filter @canalis/web dev"
   },
   "devDependencies": {
