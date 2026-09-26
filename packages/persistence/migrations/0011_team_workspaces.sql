@@ -232,5 +232,5 @@ CREATE INDEX IF NOT EXISTS reusable_policies_workspace_idx ON reusable_policy_de
 CREATE INDEX IF NOT EXISTS developer_api_keys_workspace_idx ON developer_api_keys(workspace_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS webhook_subscriptions_workspace_idx ON webhook_subscriptions(workspace_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS webhook_events_workspace_idx ON webhook_events(workspace_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS activity_events_workspace_idx ON activity_events(workspace_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS activity_events_workspace_idx ON activity_events(workspace_id, last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS audit_events_workspace_idx ON audit_events(workspace_id, created_at DESC);
