@@ -8,7 +8,7 @@
 .contextCard { padding: 1.15rem; display: grid; gap: .45rem; align-content: center; }
 .contextCard span { color: var(--ink-dim); font-size: .82rem; }
 .contextCard strong { font-size: 1.15rem; text-transform: capitalize; }
-.contextCard code, td code, .invites code { word-break: break-all; }
+.contextCard code, .tableWrap td code, .invites code { word-break: break-all; }
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .panel { padding: 1.15rem; min-width: 0; }
 .panelHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
@@ -22,7 +22,7 @@
 .workspaceList small, .invites small { color: var(--ink-dim); }
 .inlineForm, .stackForm { margin-top: 1rem; display: grid; gap: .5rem; }
 .inlineForm > div { display: flex; gap: .5rem; }
-.inlineForm input, .stackForm input, .stackForm select, td select { width: 100%; border: 1px solid var(--line-strong); background: var(--panel-strong); color: var(--ink); border-radius: 10px; min-height: 42px; padding: .6rem .7rem; }
+.inlineForm input, .stackForm input, .stackForm select, .tableWrap td select { width: 100%; border: 1px solid var(--line-strong); background: var(--panel-strong); color: var(--ink); border-radius: 10px; min-height: 42px; padding: .6rem .7rem; }
 .inlineForm button, .stackForm button, .invites button, .danger { border: 1px solid var(--line-strong); background: rgba(155,135,245,.12); color: var(--ink); border-radius: 10px; padding: .55rem .8rem; min-height: 40px; cursor: pointer; }
 .inlineForm button:disabled, .stackForm button:disabled, .invites button:disabled, .danger:disabled, .workspaceList button:disabled { opacity: .58; cursor: not-allowed; }
 .roles > div { display: grid; gap: .25rem; }
