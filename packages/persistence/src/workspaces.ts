@@ -57,8 +57,9 @@ export class PostgresWorkspaceRepository {
   }
 
   async ensurePersonalWorkspace(walletAddress: string): Promise<WorkspaceRecord> {
-    const id = `ws_${await this.walletDigest(walletAddress)}`;
-    const slug = `wallet-${await this.walletDigest(walletAddress)}`;
+    const digest = await this.walletDigest(walletAddress);
+    const id = `ws_${digest}`;
+    const slug = `wallet-${digest}`;
     const name = `Workspace ${walletAddress.slice(0, 6)}`;
     await this.sql`
       INSERT INTO workspaces (id, name, slug, signing_wallet, created_by_wallet)
@@ -280,8 +281,8 @@ export class PostgresWorkspaceRepository {
       INSERT INTO audit_events (owner_wallet, actor_wallet, workspace_id, resource_type, resource_id, action, before_state, after_state)
       VALUES (
         ${ownerWallet}, ${actorWallet}, ${workspaceId}, ${resourceType}, ${resourceId}, ${action},
-        ${before ? this.sql.unsafe(`CAST('${JSON.stringify(before).replaceAll("'", "''")}' AS jsonb)`) : null},
-        ${after ? this.sql.unsafe(`CAST('${JSON.stringify(after).replaceAll("'", "''")}' AS jsonb)`) : null}
+        CAST(${before ? JSON.stringify(before) : null} AS jsonb),
+        CAST(${after ? JSON.stringify(after) : null} AS jsonb)
       )
     `;
   }
