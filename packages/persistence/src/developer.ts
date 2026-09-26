@@ -24,6 +24,10 @@ function unix(value: unknown): string | undefined {
   return Number.isNaN(date.getTime()) ? undefined : String(Math.floor(date.getTime() / 1000));
 }
 
+function jsonSafe(value: unknown) {
+  return JSON.parse(JSON.stringify(value ?? {}));
+}
+
 function apiKey(row: Record<string, unknown>): DeveloperApiKeyRecord {
   const result: DeveloperApiKeyRecord = {
     id: String(row.id),
@@ -153,7 +157,7 @@ export class PostgresDeveloperRepository {
   }): Promise<WebhookSubscriptionRecord> {
     const rows = await this.sql<Record<string, unknown>[]>`
       INSERT INTO webhook_subscriptions (id, owner_wallet, url, description, events, secret_envelope)
-      VALUES (${input.id}, ${input.ownerWallet}, ${input.url}, ${input.description}, ${this.sql.json(input.events)}, ${this.sql.json(input.secretEnvelope)})
+      VALUES (${input.id}, ${input.ownerWallet}, ${input.url}, ${input.description}, ${this.sql.json(input.events)}, ${this.sql.json(jsonSafe(input.secretEnvelope))})
       RETURNING *
     `;
     const { secretEnvelope: _secret, ...safe } = webhook(rows[0]!);
@@ -198,7 +202,7 @@ export class PostgresDeveloperRepository {
 
   async rotateWebhookSecret(id: string, ownerWallet: string, envelope: Record<string, unknown>): Promise<boolean> {
     const rows = await this.sql<{ id: string }[]>`
-      UPDATE webhook_subscriptions SET secret_envelope = ${this.sql.json(envelope)}, updated_at = NOW()
+      UPDATE webhook_subscriptions SET secret_envelope = ${this.sql.json(jsonSafe(envelope))}, updated_at = NOW()
       WHERE id = ${id} AND owner_wallet = ${ownerWallet} RETURNING id
     `;
     return rows.length > 0;
@@ -218,7 +222,7 @@ export class PostgresDeveloperRepository {
   }): Promise<StoredWebhookEvent> {
     const rows = await this.sql<Record<string, unknown>[]>`
       INSERT INTO webhook_events (id, owner_wallet, event_type, payload)
-      VALUES (${input.id}, ${input.ownerWallet}, ${input.eventType}, ${this.sql.json(input.payload)})
+      VALUES (${input.id}, ${input.ownerWallet}, ${input.eventType}, ${this.sql.json(jsonSafe(input.payload))})
       ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
       RETURNING *
     `;
