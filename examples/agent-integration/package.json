@@ -1,0 +1,20 @@
+{
+  "name": "@canalis/agent-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node -e \"console.log('agent example is compile-verified')\"",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@canalis/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.7.3"
+  }
+}

@@ -17,6 +17,7 @@ const navigation = [
   { href: "/policies", label: "Policies", glyph: "◇" },
   { href: "/analytics", label: "Analytics", glyph: "A" },
   { href: "/activity", label: "Activity", glyph: "◉" },
+  { href: "/developers", label: "Developers", glyph: "{ }" },
   { href: "/settings", label: "Settings", glyph: "⚙" },
 ] as const;
 

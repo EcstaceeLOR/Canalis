@@ -19,7 +19,8 @@
     "security:check": "node scripts/check-secrets.mjs",
     "ux:check": "node scripts/check-ux-contracts.mjs",
     "public:check": "node scripts/check-public-product.mjs",
-    "judge:check": "pnpm test && pnpm typecheck && pnpm ux:check && pnpm public:check && pnpm security:check",
+    "developer:check": "node scripts/check-developer-platform.mjs",
+    "judge:check": "pnpm test && pnpm typecheck && pnpm ux:check && pnpm public:check && pnpm developer:check && pnpm security:check",
     "dev": "pnpm --filter @canalis/web dev"
   },
   "devDependencies": {
