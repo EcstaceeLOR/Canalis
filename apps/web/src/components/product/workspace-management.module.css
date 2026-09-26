@@ -1,0 +1,42 @@
+.page { display: grid; gap: 1.25rem; }
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 360px); gap: 1rem; align-items: stretch; }
+.hero > div:first-child, .panel, .contextCard, .empty { border: 1px solid var(--line); background: var(--panel); border-radius: 20px; box-shadow: var(--shadow); }
+.hero > div:first-child { padding: 1.5rem; }
+.hero h1, .empty h1 { margin: .2rem 0 .6rem; font-size: clamp(1.8rem, 4vw, 2.6rem); }
+.hero p, .panelHeader p, .muted, .empty p { color: var(--ink-dim); }
+.eyebrow { margin: 0; text-transform: uppercase; letter-spacing: .12em; font-size: .75rem; color: var(--cyan) !important; }
+.contextCard { padding: 1.15rem; display: grid; gap: .45rem; align-content: center; }
+.contextCard span { color: var(--ink-dim); font-size: .82rem; }
+.contextCard strong { font-size: 1.15rem; text-transform: capitalize; }
+.contextCard code, td code, .invites code { word-break: break-all; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.panel { padding: 1.15rem; min-width: 0; }
+.panelHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.panelHeader h2 { margin: 0 0 .25rem; font-size: 1.05rem; }
+.panelHeader p { margin: 0; font-size: .88rem; }
+.workspaceList, .invites, .roles { display: grid; gap: .6rem; }
+.workspaceList button, .invites > div, .roles > div { width: 100%; border: 1px solid var(--line); background: rgba(255,255,255,.025); border-radius: 12px; padding: .8rem; color: var(--ink); }
+.workspaceList button, .invites > div { display: flex; align-items: center; justify-content: space-between; gap: .8rem; text-align: left; }
+.workspaceList button:not(:disabled):hover, .activeWorkspace { border-color: var(--line-strong); background: rgba(155,135,245,.08); }
+.workspaceList span, .invites span { display: grid; gap: .15rem; }
+.workspaceList small, .invites small { color: var(--ink-dim); }
+.inlineForm, .stackForm { margin-top: 1rem; display: grid; gap: .5rem; }
+.inlineForm > div { display: flex; gap: .5rem; }
+.inlineForm input, .stackForm input, .stackForm select, td select { width: 100%; border: 1px solid var(--line-strong); background: var(--panel-strong); color: var(--ink); border-radius: 10px; min-height: 42px; padding: .6rem .7rem; }
+.inlineForm button, .stackForm button, .invites button, .danger { border: 1px solid var(--line-strong); background: rgba(155,135,245,.12); color: var(--ink); border-radius: 10px; padding: .55rem .8rem; min-height: 40px; cursor: pointer; }
+.inlineForm button:disabled, .stackForm button:disabled, .invites button:disabled, .danger:disabled, .workspaceList button:disabled { opacity: .58; cursor: not-allowed; }
+.roles > div { display: grid; gap: .25rem; }
+.roles span { color: var(--ink-dim); font-size: .84rem; }
+.tableWrap { width: 100%; overflow-x: auto; }
+.tableWrap table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.tableWrap th, .tableWrap td { padding: .75rem .6rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.tableWrap th { color: var(--ink-dim); font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; }
+.role { text-transform: capitalize; }
+.danger { background: rgba(255,125,139,.08); border-color: rgba(255,125,139,.25); color: var(--red); }
+.success, .error { margin: 0; border-radius: 12px; padding: .8rem 1rem; border: 1px solid var(--line); }
+.success { background: rgba(110,231,168,.08); color: var(--green); }
+.error { background: rgba(255,125,139,.08); color: var(--red); }
+.empty { padding: 1.5rem; }
+.empty p { margin-bottom: 0; }
+@media (max-width: 900px) { .hero, .grid { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .hero > div:first-child, .panel, .contextCard, .empty { border-radius: 16px; } .panelHeader { flex-direction: column; } .workspaceList button, .invites > div { align-items: flex-start; } .inlineForm > div { flex-direction: column; } }
