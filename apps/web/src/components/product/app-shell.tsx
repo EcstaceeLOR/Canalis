@@ -7,6 +7,7 @@ import { CanalisLogo } from "../brand/canalis-logo";
 import { useWalletIdentity, WalletAccountControl } from "../wallet/wallet-identity";
 import { NotificationCenter } from "./notification-center";
 import { ModalSurface, ProductUxRuntime } from "./product-ux";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", glyph: "⌂" },
@@ -18,6 +19,7 @@ const navigation = [
   { href: "/analytics", label: "Analytics", glyph: "A" },
   { href: "/activity", label: "Activity", glyph: "◉" },
   { href: "/developers", label: "Developers", glyph: "{ }" },
+  { href: "/workspace", label: "Workspace", glyph: "W" },
   { href: "/settings", label: "Settings", glyph: "⚙" },
 ] as const;
 
@@ -132,6 +134,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <div className="environment-chip"><span aria-hidden="true" />{runtime.environment} workspace · {runtime.defaultAssetSymbol}</div>
+        <WorkspaceSwitcher />
 
         <nav className="product-nav" aria-label="Product navigation">
           <p className="nav-section-label">Workspace</p>
