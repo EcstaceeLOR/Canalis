@@ -36,8 +36,8 @@ requireText("packages/persistence/migrations/0010_developer_platform.sql", [
 
 requireText("apps/web/src/server/developer.ts", [
   "createHmac",
-  "timing",
   "assertSafeWebhookUrl",
+  "setTimeout(() => controller.abort(), 8_000)",
   "WEBHOOK_DELIVERY_FAILED",
   "nextAttemptAt",
 ]);
