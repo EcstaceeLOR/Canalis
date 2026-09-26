@@ -114,18 +114,25 @@ export async function executeDeveloperTask(request: Request, identity: Developer
       assertSandboxCompatible(identity, settings.environment, existing.task.mode);
       await assertTaskProvidersAvailable(identity.walletAddress, existing.task.allowedProviders, existing.task.mode, { requireRuntime: true });
       const task = await application.executeTask(id);
-      const authorized = task.flows.filter((flow) => flow.status === "fulfilled");
-      const rejected = task.flows.filter((flow) => flow.status === "rejected" || flow.status === "failed");
-      await publishWebhookEvent(identity.walletAddress, "task.executed", { taskId: id, status: task.task.status, flows: task.flows.length });
+      const flows = task.graph.flows;
+      const authorized = flows.filter((flow) => flow.status === "fulfilled");
+      const rejected = flows.filter((flow) => flow.status === "rejected" || flow.status === "failed");
+      await publishWebhookEvent(identity.walletAddress, "task.executed", { taskId: id, status: task.task.status, flows: flows.length });
       for (const flow of authorized) {
         await publishWebhookEvent(identity.walletAddress, "payment.authorized", {
-          taskId: id, flowId: flow.id, providerId: flow.providerId,
-          quotedAmountAtomic: flow.quotedAmountAtomic.toString(), nextCumulativeAtomic: flow.nextCumulativeAtomic.toString(),
+          taskId: id,
+          flowId: flow.id,
+          providerId: flow.providerId,
+          quotedAmountAtomic: flow.quotedAmountAtomic,
+          nextCumulativeAtomic: flow.nextCumulativeAtomic,
         });
       }
       for (const flow of rejected) {
         await publishWebhookEvent(identity.walletAddress, "payment.rejected", {
-          taskId: id, flowId: flow.id, providerId: flow.providerId, code: flow.rejectionCode ?? "PROVIDER_CALL_FAILED",
+          taskId: id,
+          flowId: flow.id,
+          providerId: flow.providerId,
+          code: flow.rejectionCode ?? "PROVIDER_CALL_FAILED",
         });
       }
       if (task.task.status === "completed") await publishWebhookEvent(identity.walletAddress, "task.completed", { taskId: id });
@@ -147,7 +154,10 @@ export async function getDeveloperReceipts(identity: DeveloperIdentity, id: stri
   if (task.task.owner !== identity.walletAddress) throw new ApplicationError("FORBIDDEN", "This task belongs to a different wallet.", 403);
   return v1Json({
     taskId: id,
-    receipts: task.flows.filter((flow) => Boolean(flow.receipt)).map((flow) => ({ flowId: flow.id, providerId: flow.providerId, status: flow.status, receipt: flow.receipt })),
-    settlements: task.settlements,
+    receipts: task.graph.flows
+      .filter((flow) => Boolean(flow.receipt))
+      .map((flow) => ({ flowId: flow.id, providerId: flow.providerId, status: flow.status, receipt: flow.receipt })),
+    settlements: task.graph.settlements,
+    settlement: task.settlement,
   });
 }
