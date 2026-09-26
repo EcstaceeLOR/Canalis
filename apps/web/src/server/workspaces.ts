@@ -49,8 +49,11 @@ function cookieValue(request: Request, name: string): string | undefined {
   return undefined;
 }
 
-function requestedWorkspaceId(request: Request): string | undefined {
-  return request.headers.get("x-canalis-workspace-id")?.trim() || cookieValue(request, CANALIS_WORKSPACE_COOKIE)?.trim() || undefined;
+function requestedWorkspace(request: Request): { id?: string; strict: boolean } {
+  const header = request.headers.get("x-canalis-workspace-id")?.trim();
+  if (header) return { id: header, strict: true };
+  const cookie = cookieValue(request, CANALIS_WORKSPACE_COOKIE)?.trim();
+  return { ...(cookie ? { id: cookie } : {}), strict: false };
 }
 
 export async function resolveWorkspaceIdentity(
@@ -59,14 +62,22 @@ export async function resolveWorkspaceIdentity(
 ): Promise<WorkspaceSessionIdentity> {
   const store = await getWorkspaceRepository();
   await store.ensurePersonalWorkspace(identity.walletAddress);
-  const requested = requestedWorkspaceId(request);
   const memberships = await store.listForWallet(identity.walletAddress);
-  const selectedId = requested ?? memberships[0]?.id;
-  if (!selectedId) throw new ApplicationError("WORKSPACE_NOT_FOUND", "No workspace is available for this wallet.", 404);
-  const record = await store.getForMember(selectedId, identity.walletAddress);
-  if (!record) {
+  const requested = requestedWorkspace(request);
+  const fallbackId = memberships[0]?.id;
+  if (!fallbackId) throw new ApplicationError("WORKSPACE_NOT_FOUND", "No workspace is available for this wallet.", 404);
+
+  let selectedId = requested.id ?? fallbackId;
+  let record = await store.getForMember(selectedId, identity.walletAddress);
+  if (!record && requested.id && requested.strict) {
     throw new ApplicationError("WORKSPACE_ACCESS_DENIED", "You do not have access to the requested workspace.", 403);
   }
+  if (!record) {
+    selectedId = fallbackId;
+    record = await store.getForMember(selectedId, identity.walletAddress);
+  }
+  if (!record) throw new ApplicationError("WORKSPACE_NOT_FOUND", "No accessible workspace is available for this wallet.", 404);
+
   return {
     walletAddress: record.workspace.signingWallet,
     actorWalletAddress: identity.walletAddress,
