@@ -213,13 +213,13 @@ Webhook URLs are required to use HTTPS outside local development, may not embed 
 
 ### Retries and observability
 
-Each delivery attempt is persisted with event ID, subscription ID, attempt number, HTTP result/error, and next retry timestamp. Failed attempts can be retried from the Developers workspace or through:
+Each delivery attempt is persisted with event ID, subscription ID, attempt number, HTTP result/error, and next retry timestamp. Failed deliveries remain observable and retry-safe. They can be retried manually from the Developers workspace or through:
 
 ```http
 POST /api/v1/webhooks/deliveries/{deliveryId}/retry
 ```
 
-Retries create a new delivery attempt for the same stable event ID; a succeeded attempt is idempotently left alone.
+Retries create a new delivery attempt for the same stable event ID; a succeeded attempt is idempotently left alone. `nextAttemptAt` is retained for queue/scheduler integration, but this release does not claim an always-on background worker where the deployment has not configured one.
 
 ## 6. Clean sandbox example
 
@@ -232,7 +232,7 @@ export CANALIS_BASE_URL='https://canalis-sigma.vercel.app'
 pnpm --filter @canalis/agent-example start
 ```
 
-The example creates a deterministic sandbox task, executes it, and reads receipts. It requires no private key or wallet seed in the agent process.
+The example creates a deterministic sandbox task, executes it, and reads channels, receipts, and settlement evidence. It requires no private key or wallet seed in the agent process.
 
 ## 7. Production configuration
 
