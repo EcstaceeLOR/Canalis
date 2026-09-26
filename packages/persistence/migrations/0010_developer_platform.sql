@@ -57,10 +57,87 @@ CREATE TABLE IF NOT EXISTS webhook_deliveries (
 CREATE INDEX IF NOT EXISTS webhook_deliveries_subscription_idx ON webhook_deliveries(subscription_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS webhook_deliveries_retry_idx ON webhook_deliveries(status, next_attempt_at) WHERE status = 'failed';
 
-DROP TRIGGER IF EXISTS audit_developer_api_keys ON developer_api_keys;
-CREATE TRIGGER audit_developer_api_keys AFTER INSERT OR UPDATE OR DELETE ON developer_api_keys
-FOR EACH ROW EXECUTE FUNCTION canalis_capture_audit_event();
+CREATE OR REPLACE FUNCTION canalis_sanitize_audit_snapshot(
+  table_name TEXT,
+  snapshot JSONB
+) RETURNS JSONB
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+BEGIN
+  IF snapshot IS NULL THEN RETURN NULL; END IF;
+  IF table_name = 'providers' THEN
+    RETURN snapshot - 'secret_config' - 'config' - 'last_error_message';
+  END IF;
+  IF table_name = 'channels' THEN RETURN snapshot - 'recovery_state'; END IF;
+  IF table_name = 'developer_api_keys' THEN RETURN snapshot - 'token_hash'; END IF;
+  IF table_name = 'webhook_subscriptions' THEN RETURN snapshot - 'secret_envelope'; END IF;
+  RETURN snapshot;
+END;
+$$;
 
-DROP TRIGGER IF EXISTS audit_webhook_subscriptions ON webhook_subscriptions;
-CREATE TRIGGER audit_webhook_subscriptions AFTER INSERT OR UPDATE OR DELETE ON webhook_subscriptions
-FOR EACH ROW EXECUTE FUNCTION canalis_capture_audit_event();
+CREATE OR REPLACE FUNCTION canalis_write_audit_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  before_snapshot JSONB;
+  after_snapshot JSONB;
+  source_snapshot JSONB;
+  audit_owner TEXT;
+  audit_resource_id TEXT;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    before_snapshot := NULL;
+    after_snapshot := canalis_sanitize_audit_snapshot(TG_TABLE_NAME, to_jsonb(NEW));
+    source_snapshot := to_jsonb(NEW);
+  ELSIF TG_OP = 'DELETE' THEN
+    before_snapshot := canalis_sanitize_audit_snapshot(TG_TABLE_NAME, to_jsonb(OLD));
+    after_snapshot := NULL;
+    source_snapshot := to_jsonb(OLD);
+  ELSE
+    before_snapshot := canalis_sanitize_audit_snapshot(TG_TABLE_NAME, to_jsonb(OLD));
+    after_snapshot := canalis_sanitize_audit_snapshot(TG_TABLE_NAME, to_jsonb(NEW));
+    source_snapshot := to_jsonb(NEW);
+  END IF;
+
+  IF TG_TABLE_NAME = 'account_settings' THEN
+    audit_owner := source_snapshot->>'owner_wallet'; audit_resource_id := source_snapshot->>'owner_wallet';
+  ELSIF TG_TABLE_NAME IN ('providers', 'reusable_policy_definitions', 'developer_api_keys', 'webhook_subscriptions') THEN
+    audit_owner := COALESCE(source_snapshot->>'owner_wallet', 'system'); audit_resource_id := source_snapshot->>'id';
+  ELSIF TG_TABLE_NAME = 'reusable_policy_versions' THEN
+    SELECT owner_wallet INTO audit_owner FROM reusable_policy_definitions WHERE id = source_snapshot->>'policy_id';
+    audit_resource_id := (source_snapshot->>'policy_id') || ':v' || (source_snapshot->>'version');
+  ELSIF TG_TABLE_NAME = 'tasks' THEN
+    audit_owner := source_snapshot->>'owner'; audit_resource_id := source_snapshot->>'id';
+  ELSIF TG_TABLE_NAME IN ('policies', 'channels', 'settlements') THEN
+    SELECT owner INTO audit_owner FROM tasks WHERE id = source_snapshot->>'task_id';
+    IF TG_TABLE_NAME = 'policies' THEN
+      audit_resource_id := source_snapshot->>'task_id';
+    ELSIF TG_TABLE_NAME = 'channels' THEN
+      audit_resource_id := (source_snapshot->>'task_id') || ':' || (source_snapshot->>'provider_id');
+    ELSE
+      audit_resource_id := (source_snapshot->>'task_id') || ':' || (source_snapshot->>'provider_id') || ':' || COALESCE(source_snapshot->>'transaction_signature', 'pending');
+    END IF;
+  ELSE
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO audit_events (owner_wallet, actor_wallet, resource_type, resource_id, action, before_state, after_state)
+  VALUES (
+    COALESCE(audit_owner, 'system'), COALESCE(audit_owner, 'system'), TG_TABLE_NAME,
+    COALESCE(audit_resource_id, 'unknown'), lower(TG_OP), before_snapshot, after_snapshot
+  );
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS canalis_audit_developer_api_keys ON developer_api_keys;
+CREATE TRIGGER canalis_audit_developer_api_keys AFTER INSERT OR UPDATE OR DELETE ON developer_api_keys
+FOR EACH ROW EXECUTE FUNCTION canalis_write_audit_event();
+
+DROP TRIGGER IF EXISTS canalis_audit_webhook_subscriptions ON webhook_subscriptions;
+CREATE TRIGGER canalis_audit_webhook_subscriptions AFTER INSERT OR UPDATE OR DELETE ON webhook_subscriptions
+FOR EACH ROW EXECUTE FUNCTION canalis_write_audit_event();
