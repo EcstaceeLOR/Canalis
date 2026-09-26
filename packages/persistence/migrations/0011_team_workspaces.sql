@@ -103,19 +103,41 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   tenant_wallet TEXT;
+  tenant_workspace TEXT;
 BEGIN
   IF TG_TABLE_NAME = 'tasks' THEN
     tenant_wallet := NEW.owner;
   ELSE
     tenant_wallet := NEW.owner_wallet;
   END IF;
+
   IF tenant_wallet IS NULL OR tenant_wallet = '' OR tenant_wallet = 'system' THEN
     RETURN NEW;
   END IF;
-  SELECT id INTO NEW.workspace_id FROM workspaces WHERE signing_wallet = tenant_wallet LIMIT 1;
-  IF NEW.workspace_id IS NULL THEN
-    RAISE EXCEPTION 'workspace missing for wallet %', tenant_wallet;
+
+  SELECT id INTO tenant_workspace
+  FROM workspaces
+  WHERE signing_wallet = tenant_wallet
+  LIMIT 1;
+
+  IF tenant_workspace IS NULL THEN
+    INSERT INTO workspaces (id, name, slug, signing_wallet, created_by_wallet)
+    VALUES (
+      'ws_' || substr(md5(tenant_wallet), 1, 24),
+      'Workspace ' || left(tenant_wallet, 6),
+      'wallet-' || substr(md5(tenant_wallet), 1, 24),
+      tenant_wallet,
+      tenant_wallet
+    )
+    ON CONFLICT (signing_wallet) DO UPDATE SET signing_wallet = EXCLUDED.signing_wallet
+    RETURNING id INTO tenant_workspace;
+
+    INSERT INTO workspace_members (workspace_id, wallet_address, role, added_by_wallet)
+    VALUES (tenant_workspace, tenant_wallet, 'owner', tenant_wallet)
+    ON CONFLICT (workspace_id, wallet_address) DO NOTHING;
   END IF;
+
+  NEW.workspace_id := tenant_workspace;
   RETURN NEW;
 END;
 $$;
