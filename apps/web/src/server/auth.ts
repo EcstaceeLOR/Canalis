@@ -2,11 +2,13 @@ import {
   ApplicationError,
   WalletAuthService,
   type WalletSessionIdentity,
+  type WorkspaceSessionIdentity,
 } from "@canalis/application";
 import { PostgresWalletAuthRepository } from "@canalis/persistence";
 import { assertRequestOrigin } from "./api";
 import { getCanalisApplication } from "./canalis";
 import { enforceAuthenticatedRateLimit } from "./security";
+import { assertRequestWorkspacePermission, resolveWorkspaceIdentity } from "./workspaces";
 
 export const CANALIS_SESSION_COOKIE = "canalis_session";
 
@@ -54,11 +56,18 @@ export function sessionTokenFromRequest(request: Request): string | undefined {
   return undefined;
 }
 
-export async function requireWalletSession(request: Request): Promise<WalletSessionIdentity> {
+export async function requireRawWalletSession(request: Request): Promise<WalletSessionIdentity> {
   assertRequestOrigin(request);
   const service = await getWalletAuthService();
   const identity = await service.authenticate(sessionTokenFromRequest(request));
   await enforceAuthenticatedRateLimit(request, identity.walletAddress);
+  return identity;
+}
+
+export async function requireWalletSession(request: Request): Promise<WorkspaceSessionIdentity> {
+  const raw = await requireRawWalletSession(request);
+  const identity = await resolveWorkspaceIdentity(request, raw);
+  assertRequestWorkspacePermission(request, identity);
   return identity;
 }
 
@@ -70,12 +79,12 @@ export async function revokeWalletSession(request: Request): Promise<void> {
 
 export function assertWalletOwnsTask(
   task: { task: { owner: string } },
-  identity: WalletSessionIdentity,
+  identity: WorkspaceSessionIdentity,
 ): void {
-  if (task.task.owner !== identity.walletAddress) {
+  if (task.task.owner !== identity.signingWalletAddress) {
     throw new ApplicationError(
       "FORBIDDEN",
-      "This task belongs to a different wallet.",
+      "This task belongs to a different workspace.",
       403,
     );
   }
