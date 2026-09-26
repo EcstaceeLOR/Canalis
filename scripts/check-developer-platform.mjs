@@ -43,12 +43,12 @@ requireText("apps/web/src/server/developer.ts", [
 ]);
 
 requireText("apps/web/src/server/developer-api.ts", [
+  'headers.set("canalis-api-version", "v1")',
   'operation: "v1.task.create"',
   'operation: "v1.task.execute"',
   "publishWebhookEvent",
 ]);
-
-requireText("apps/web/src/app/api/v1/route.ts", ["canalis-api-version", "v1"]);
+requireText("apps/web/src/app/api/v1/route.ts", ["v1Json", 'version: "v1"']);
 requireText("packages/sdk/src/index.ts", [
   "/api/v1/tasks",
   "/api/v1/webhooks",
