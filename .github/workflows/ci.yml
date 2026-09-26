@@ -39,6 +39,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm ux:check
       - run: pnpm public:check
+      - run: pnpm developer:check
       - run: pnpm security:check
 
   devnet-proof:
