@@ -4,3 +4,12 @@ packages:
   - "apps/*"
   - "packages/*"
   - "examples/*"
+
+# These packages provide optional native acceleration. Canalis deliberately
+# uses their tested JavaScript/WASM fallbacks so installs never execute
+# unreviewed dependency build scripts in CI or Vercel.
+ignoredBuiltDependencies:
+  - bigint-buffer
+  - bufferutil
+  - esbuild
+  - utf-8-validate
