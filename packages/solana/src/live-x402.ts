@@ -101,6 +101,81 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+type SettlementConfirmationOptions = {
+  attempts?: number;
+  delayMs?: number;
+  sleep?: (ms: number) => Promise<void>;
+};
+
+/**
+ * A public RPC can accept a broadcast and then rate-limit the confirmation
+ * request. Never rebroadcast that signed transaction. Poll its existing
+ * signature and promote the result only when Solana reports it confirmed.
+ */
+export async function recoverRateLimitedBroadcast(
+  connection: Pick<Connection, "getSignatureStatuses">,
+  result: SettleResponse,
+  options: SettlementConfirmationOptions = {},
+): Promise<SettleResponse> {
+  const evidence = result as SettleResponse & {
+    transaction?: unknown;
+    errorMessage?: unknown;
+  };
+  if (
+    result.success ||
+    typeof evidence.transaction !== "string" ||
+    evidence.transaction.length === 0 ||
+    typeof evidence.errorMessage !== "string" ||
+    !evidence.errorMessage.includes("429")
+  ) {
+    return result;
+  }
+
+  const attempts = options.attempts ?? 5;
+  const delayMs = options.delayMs ?? 1_500;
+  const wait = options.sleep ?? sleep;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await connection.getSignatureStatuses(
+        [evidence.transaction],
+        { searchTransactionHistory: true },
+      );
+      const status = response.value[0];
+      if (status?.err) {
+        throw new Error(
+          `Broadcast Solana settlement ${evidence.transaction} failed: ${JSON.stringify(status.err)}`,
+        );
+      }
+      if (
+        status?.confirmationStatus === "confirmed" ||
+        status?.confirmationStatus === "finalized"
+      ) {
+        const {
+          errorReason: _errorReason,
+          errorMessage: _errorMessage,
+          ...confirmedEvidence
+        } = result as unknown as Record<string, unknown>;
+        return {
+          ...confirmedEvidence,
+          success: true,
+          transaction: evidence.transaction,
+        } as unknown as SettleResponse;
+      }
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("429")) {
+        throw error;
+      }
+    }
+
+    if (attempt < attempts) {
+      await wait(delayMs * attempt);
+    }
+  }
+
+  return result;
+}
+
 function settlementTransaction(result: SettleResponse): string {
   const transaction = (result as { transaction?: unknown }).transaction;
   if (!result.success || typeof transaction !== "string" || transaction.length === 0) {
@@ -211,9 +286,11 @@ export class DevnetX402ChannelGateway {
 
   private async settleWithSafeRetry(payload: PaymentPayload, requirements: PaymentRequirements) {
     let result = await this.facilitator.settle(payload, requirements);
+    result = await recoverRateLimitedBroadcast(this.connection, result);
     for (let retry = 1; retry <= 3 && isTransientRpcRateLimit(result); retry += 1) {
       await sleep(retry * 1_500);
       result = await this.facilitator.settle(payload, requirements);
+      result = await recoverRateLimitedBroadcast(this.connection, result);
     }
     return result;
   }
