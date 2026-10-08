@@ -23,6 +23,31 @@ const PROVIDER_ID = "search";
 const CEILING_ATOMIC = 100_000n;
 const AUTHORIZED_ATOMIC = 30_000n;
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withRpcBackoff(label, operation) {
+  let lastError;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("429") && !message.includes("Too Many Requests")) {
+        throw error;
+      }
+      if (attempt < 5) {
+        const delayMs = attempt * 3_000;
+        console.warn(`[product-devnet-proof] ${label} rate-limited; retry ${attempt}/4 in ${delayMs}ms`);
+        await sleep(delayMs);
+      }
+    }
+  }
+  throw lastError;
+}
+
 function seededKeypair(label) {
   return Keypair.fromSeed(createHash("sha256").update(label).digest());
 }
@@ -83,7 +108,12 @@ async function main() {
     new UptoSvmScheme(payerSigner, { rpcUrl: RPC_URL }),
   );
 
-  const paymentPayload = await client.createPaymentPayload(preparation.paymentRequired);
+  // Payload creation only reads the current channel slot and signs offchain, so
+  // bounded retry is safe when the public devnet RPC rate-limits that read.
+  const paymentPayload = await withRpcBackoff(
+    "payment payload preparation",
+    () => client.createPaymentPayload(preparation.paymentRequired),
+  );
   const opened = await gateway.deposit(paymentPayload, accepted, payerAddress);
   const payerAfterOpen = await tokenBalance(connection, payerTokenAccount);
 
