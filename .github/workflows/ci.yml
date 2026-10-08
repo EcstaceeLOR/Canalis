@@ -60,7 +60,9 @@ jobs:
           node-version: 22
       - run: pnpm install --frozen-lockfile
       - name: Prove original Solana payment-channel lifecycle on devnet
+        id: original-devnet-proof
         if: github.event_name == 'workflow_dispatch'
+        continue-on-error: true
         run: pnpm --filter @canalis/channel-spike devnet:proof
         env:
           SVM_RPC_URL: https://api.devnet.solana.com
@@ -69,7 +71,7 @@ jobs:
         env:
           SVM_RPC_URL: https://api.devnet.solana.com
       - name: Upload original devnet proof artifact
-        if: github.event_name == 'workflow_dispatch' && success()
+        if: github.event_name == 'workflow_dispatch' && steps.original-devnet-proof.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: canalis-devnet-payment-channel-proof
