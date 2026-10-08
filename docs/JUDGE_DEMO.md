@@ -32,7 +32,8 @@ Prerequisites: Node.js 22+ and pnpm 10.17.1.
 git clone https://github.com/EcstaceeLOR/Canalis.git
 cd Canalis
 cp .env.example .env
-pnpm install --no-frozen-lockfile
+corepack enable pnpm
+pnpm install --frozen-lockfile
 pnpm judge:check
 pnpm dev
 ```

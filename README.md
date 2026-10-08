@@ -98,7 +98,8 @@ Requirements: **Node.js 22+**, **pnpm 10.17.1**, and Postgres for durable produc
 git clone https://github.com/EcstaceeLOR/Canalis.git
 cd Canalis
 cp .env.example .env
-pnpm install --no-frozen-lockfile
+corepack enable pnpm
+pnpm install --frozen-lockfile
 pnpm db:migrate
 pnpm judge:check
 pnpm dev
@@ -107,6 +108,8 @@ pnpm dev
 Open `http://localhost:3000`.
 
 `pnpm judge:check` runs the production build/tests, TypeScript validation, responsive/accessibility contracts, public-product/onboarding metadata contracts, and committed-secret scanning.
+
+Release installs are lockfile-frozen. See [`docs/DEPENDENCY_POLICY.md`](docs/DEPENDENCY_POLICY.md) before changing Solana, x402, wallet, token, signing, or build dependencies.
 
 ## Production URL and release metadata
 

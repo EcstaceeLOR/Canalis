@@ -33,7 +33,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @canalis/persistence db:migrate
       - run: pnpm test
       - run: pnpm typecheck
@@ -58,7 +58,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - name: Prove original Solana payment-channel lifecycle on devnet
         if: github.event_name == 'workflow_dispatch'
         run: pnpm --filter @canalis/channel-spike devnet:proof
