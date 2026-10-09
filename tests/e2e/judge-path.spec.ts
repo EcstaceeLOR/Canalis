@@ -53,9 +53,10 @@ test("three-minute judge path persists, renders, and rejects policy violations",
   expect(healthResponse.status()).toBe(200);
   expect(await healthResponse.json()).toMatchObject({
     status: "ok",
-    checks: { web: "ok", durableStorage: "configured" },
+    checks: { web: "ok", durableStorage: "connected" },
   });
 
+  const judgePathStartedAt = Date.now();
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Give the agent a budget");
   await expect(page.getByText("$1.00 USDC example", { exact: true })).toBeVisible();
@@ -109,4 +110,7 @@ test("three-minute judge path persists, renders, and rejects policy violations",
   await expect(page.getByText("PER_CALL_CAP_EXCEEDED", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("$0.03", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("$0.97", { exact: true }).first()).toBeVisible();
+  expect(Date.now() - judgePathStartedAt, "judge journey should complete within three minutes").toBeLessThanOrEqual(
+    180_000,
+  );
 });

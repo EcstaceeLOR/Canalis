@@ -26,7 +26,8 @@ requireText(layout, "metadataBase", "metadata");
 requireText(layout, "openGraph", "metadata");
 requireText(layout, "twitter", "metadata");
 requireText(release, "https://canalis-sigma.vercel.app", "release metadata");
-requireText(health, 'durableStorage ? "configured" : "not-configured"', "health endpoint");
+requireText(health, "assertDatabaseConnection", "health endpoint");
+requireText(health, 'durableStorage = "connected"', "health endpoint");
 
 requireText(onboarding, "runtime-ready provider", "onboarding");
 requireText(onboarding, "Create a reusable spending policy", "onboarding");

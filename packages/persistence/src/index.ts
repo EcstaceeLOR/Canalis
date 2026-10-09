@@ -2,6 +2,7 @@ export * from "./activity.js";
 export * from "./auth.js";
 export * from "./channels.js";
 export * from "./developer.js";
+export * from "./health.js";
 export * from "./live-channels.js";
 export * from "./migrate.js";
 export * from "./operations.js";
