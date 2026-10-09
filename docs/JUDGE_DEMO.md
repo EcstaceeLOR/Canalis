@@ -123,6 +123,35 @@ If external infrastructure is unavailable, do **not** substitute fake transactio
 
 > Canalis lets autonomous agents spend quickly without giving up financial control: one budget, many services, explicit policy, verifiable receipts, Solana settlement, and automatic recovery of what the agent did not use.
 
+## Latest verified Solana devnet evidence
+
+The live product proof was regenerated on **October 8, 2026** from commit
+[`494db6b`](https://github.com/EcstaceeLOR/Canalis/commit/494db6bd2dd693803c07fd44a7726b52d58820ab)
+by [GitHub Actions run 37846045411](https://github.com/EcstaceeLOR/Canalis/actions/runs/37846045411).
+The run passed the full Postgres-backed verification job before producing and
+uploading the `canalis-live-product-channel-proof` artifact.
+
+Verified devnet evidence:
+
+- Channel: [`2geWGYUCktR6qg4EcN4Qki7bAEUcQHFZbBxuvs1AEsHk`](https://explorer.solana.com/address/2geWGYUCktR6qg4EcN4Qki7bAEUcQHFZbBxuvs1AEsHk?cluster=devnet)
+- Open transaction: [`3BjuK14…Rd2v1`](https://explorer.solana.com/tx/3BjuK14J5rh81H8YtWjY6zA7nYmSsg9PfZF34m53Y99EWtyPQTKPS9xivZ9MsAKEoWcwCnxoBnTL3h47BywRd2v1?cluster=devnet)
+- Finalization transaction: [`Mp82Kwa…jdubg`](https://explorer.solana.com/tx/Mp82KwadrqJkoohK9TmPijmeE9QMv8FNwA25FR2Nb1oi7gq8ecB9F44rgE2HZstqo7Kqci1URPAdmdAHGLjdubg?cluster=devnet)
+- Channel ceiling: `100,000` atomic units
+- Provider payout / payer net spend: `30,000` atomic units
+- Unused amount returned to payer: `70,000` atomic units
+
+Both transaction signatures were independently queried after the run and were
+`finalized` with no transaction error. The artifact satisfies:
+
+```text
+30,000 provider payout + 70,000 payer refund = 100,000 channel ceiling
+```
+
+The policy-denial path is separately deterministic and creates no paid work or
+voucher advancement. It is covered by the core route test
+`records a rejected flow instead of returning paid work` and the protocol test
+`blocks an MPP paid fetch when the task policy rejects the quote`.
+
 ## Judge proof checklist
 
 Before recording or presenting:
