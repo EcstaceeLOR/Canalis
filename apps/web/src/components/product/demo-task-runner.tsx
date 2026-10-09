@@ -21,6 +21,7 @@ export function DemoTaskRunner() {
   const [cap, setCap] = useState("0.25");
   const [selected, setSelected] = useState<ProviderId[]>(["search", "data", "inference"]);
   const [response, setResponse] = useState<DemoResponse | null>(null);
+  const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const spentPercent = useMemo(() => response ? Math.round((Number(BigInt(response.graph.spentAtomic)) / Number(BigInt(response.graph.budgetAtomic))) * 100) : 0, [response]);
@@ -44,6 +45,7 @@ export function DemoTaskRunner() {
       const executed = await executeResult.json() as DemoResponse | ApiError;
       if (!executeResult.ok || "error" in executed) throw new Error(apiMessage(executed, "Task execution failed."));
       setResponse(executed);
+      setSelectedFlow(null);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Task failed."); }
     finally { setRunning(false); }
   }
@@ -73,8 +75,12 @@ export function DemoTaskRunner() {
         <div className="budget-summary"><div><span>Authorized</span><strong>{response ? usd(response.graph.spentAtomic) : "$0.00"}</strong></div><div><span>Recoverable</span><strong>{response ? usd(response.graph.remainingAtomic) : `$${budget}`}</strong></div><div><span>Utilization</span><strong>{spentPercent}%</strong></div></div>
         <div className="utilization-track"><span style={{ width: `${spentPercent}%` }} /></div>
         <div className="flow-timeline">
-          {response ? response.graph.flows.map((flow, index) => <article key={flow.id} className={`flow-event ${flow.status}`}><div className="flow-index">{index + 1}</div><div><div className="flow-event-top"><strong>{providers[flow.providerId as ProviderId]?.name ?? flow.providerId}</strong><span>{usd(flow.quotedAmountAtomic)}</span></div><p>{flow.status === "fulfilled" ? "Policy approved · receipt persisted" : flow.rejectionCode}</p><small>{flow.status === "fulfilled" ? `Cumulative ${usd(flow.nextCumulativeAtomic)} · ${compact(flow.paymentReference)}` : flow.rejectionMessage}</small></div></article>) : <div className="empty-panel"><span>◎</span><strong>No execution yet</strong><p>Run the reference task to inspect policy decisions, persisted receipts, and recoverable budget.</p></div>}
+          {response ? response.graph.flows.map((flow, index) => {
+            const providerName = providers[flow.providerId as ProviderId]?.name ?? flow.providerId;
+            return <button type="button" aria-label={`Inspect ${providerName} payment`} onClick={() => setSelectedFlow(flow)} key={flow.id} className={`flow-event ${flow.status}`}><div className="flow-index">{index + 1}</div><div><div className="flow-event-top"><strong>{providerName}</strong><span>{usd(flow.quotedAmountAtomic)}</span></div><p>{flow.status === "fulfilled" ? "Policy approved · receipt persisted" : flow.rejectionCode}</p><small>{flow.status === "fulfilled" ? `Cumulative ${usd(flow.nextCumulativeAtomic)} · ${compact(flow.paymentReference)}` : flow.rejectionMessage}</small></div></button>;
+          }) : <div className="empty-panel"><span>◎</span><strong>No execution yet</strong><p>Run the reference task to inspect policy decisions, persisted receipts, and recoverable budget.</p></div>}
         </div>
+        {selectedFlow ? <section className="flow-inspector" role="region" aria-label="Payment flow details"><div className="flow-inspector-head"><div><span>Payment flow details</span><strong>{providers[selectedFlow.providerId as ProviderId]?.name ?? selectedFlow.providerId}</strong></div><button type="button" aria-label="Close payment flow details" onClick={() => setSelectedFlow(null)}>×</button></div><dl><div><dt>Status</dt><dd>{selectedFlow.status}</dd></div><div><dt>Quoted price</dt><dd>{usd(selectedFlow.quotedAmountAtomic)}</dd></div><div><dt>Cumulative authorization</dt><dd>{usd(selectedFlow.nextCumulativeAtomic)}</dd></div><div><dt>Request</dt><dd><code>{selectedFlow.requestId}</code></dd></div>{selectedFlow.paymentReference ? <div className="wide"><dt>Payment reference</dt><dd><code>{selectedFlow.paymentReference}</code></dd></div> : null}{selectedFlow.receipt?.responseHash ? <div className="wide"><dt>Response hash</dt><dd><code>{selectedFlow.receipt.responseHash}</code></dd></div> : null}{selectedFlow.rejectionCode ? <div className="wide"><dt>Policy decision</dt><dd>{selectedFlow.rejectionCode} · {selectedFlow.rejectionMessage}</dd></div> : null}</dl></section> : null}
         {response ? <div className="settlement-strip"><span>Settlement state</span><strong>Awaiting live on-chain finalization</strong><small>Execution state is durable; the deterministic provider mode still does not invent transaction signatures.</small></div> : null}
       </section>
     </div>
