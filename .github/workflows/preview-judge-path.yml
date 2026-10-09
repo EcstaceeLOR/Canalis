@@ -18,7 +18,8 @@ jobs:
   preview-judge-path:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.deployment_status.state == 'success' &&
+      (vars.VERCEL_PREVIEW_TRUSTED == 'true' &&
+       github.event.deployment_status.state == 'success' &&
        github.event.deployment_status.environment == 'Preview')
     runs-on: ubuntu-latest
     timeout-minutes: 8

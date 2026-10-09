@@ -32,6 +32,8 @@ Never print, pull, or commit production secret values. Rotating either encryptio
 
 The Vercel build runs schema migration before `next build` and serializes it with a Postgres advisory lock. On Neon, the migration uses `DATABASE_URL_UNPOOLED`; request-time repositories use the pooled URL and never run schema work during a function cold start.
 
+Protected previews require a Vercel Trusted Source for the `EcstaceeLOR/Canalis` GitHub OIDC identity, scoped from GitHub Actions to Preview only. After that dashboard rule is saved, set the GitHub repository variable `VERCEL_PREVIEW_TRUSTED=true`; deployment events then run `preview-judge-path` automatically. The variable guard prevents an unauthenticated protection-page response from being mistaken for an application failure before the trust rule exists.
+
 ## Monitoring and alerting
 
 The `production-smoke` GitHub Actions workflow runs every 15 minutes and checks the canonical landing page, judge path, and a live database query through `/api/health`. A failed workflow is the uptime alert and should remain enabled in repository Actions notifications.
