@@ -2,26 +2,27 @@
 
 Canalis is financial infrastructure for autonomous software agents: controlled, technical, transparent, and calm.
 
-## Brand mark — Flow
+## Brand mark — Channel Gate
 
-The approved Canalis identity is **Flow**: two ribbon-like lanes moving through a shared direction with a distinct terminal node.
+The approved Canalis identity is **Channel Gate**: an open angular channel with a distinct policy checkpoint.
 
 The mark represents:
 
-- autonomous value moving continuously rather than transaction-by-transaction UI chrome,
-- multiple paid operations sharing one governed financial layer,
-- a clear destination/settlement point without turning the logo into a literal architecture diagram.
+- autonomous value moving continuously rather than transaction-by-transaction UI chrome;
+- multiple paid operations sharing one governed financial layer;
+- an open, angular `C` for Canalis and a governed channel rather than a generic wave;
+- a diamond checkpoint where policy is evaluated before value exits the channel.
 
 The silhouette must remain identifiable in one color. Gradient is an optional brand treatment, never the thing that makes the logo recognizable.
 
 ### Assets
 
-- `apps/web/public/canalis-mark.svg` — primary color Flow mark
-- `apps/web/public/canalis-mark-mono.svg` — monochrome Flow mark for light, print, or constrained contexts
+- `apps/web/public/canalis-mark.svg` — primary color Channel Gate mark
+- `apps/web/public/canalis-mark-mono.svg` — monochrome Channel Gate mark for light, print, or constrained contexts
 - `apps/web/src/app/icon.svg` — dark application/favicon treatment
-- `apps/web/src/components/brand/canalis-logo.tsx` — reusable Flow mark + `Canalis` wordmark component with `brand`, `mono`, and `muted` tones
+- `apps/web/src/components/brand/canalis-logo.tsx` — reusable Channel Gate mark + `Canalis` wordmark component with `brand`, `mono`, and `muted` tones
 
-Keep clear space around the mark equal to roughly the terminal-node diameter. Do not stretch, rotate, add internal shadows, outline individual ribbons, or combine the mark with Solana's logo.
+Keep clear space around the mark equal to roughly the gate-diamond width. Do not stretch, rotate, add internal shadows, close the channel opening, or combine the mark with Solana's logo.
 
 ### Wordmark
 

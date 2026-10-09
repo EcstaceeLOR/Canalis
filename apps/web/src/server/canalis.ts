@@ -3,7 +3,6 @@ import {
   CanalisApplication,
 } from "@canalis/application";
 import {
-  migrateDatabase,
   PostgresCanalisRepository,
 } from "@canalis/persistence";
 
@@ -25,7 +24,6 @@ export async function getCanalisApplication(): Promise<CanalisApplication> {
 
   if (!initialization) {
     initialization = (async () => {
-      await migrateDatabase(databaseUrl);
       repository = new PostgresCanalisRepository(databaseUrl);
       application = new CanalisApplication(repository);
       return application;

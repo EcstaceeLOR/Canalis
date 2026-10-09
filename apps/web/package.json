@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "pnpm --filter @canalis/persistence db:migrate && next build",
     "start": "next start",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
@@ -17,6 +18,7 @@
     "@canalis/persistence": "0.0.1",
     "@canalis/providers": "0.0.1",
     "@canalis/solana": "0.0.1",
+    "@metamask/connect-solana": "^2.1.1",
     "@solana/kit": "^6.1.0",
     "@wallet-standard/app": "^1.1.1",
     "@x402/core": "^2.24.0",

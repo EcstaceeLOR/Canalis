@@ -1,0 +1,32 @@
+name: production-smoke
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify canonical pages and durable storage
+        env:
+          CANALIS_URL: https://canalis-sigma.vercel.app
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / /tasks/demo; do
+            status="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' --max-time 20 "$CANALIS_URL$path")"
+            test "$status" = "200" || { echo "Expected 200 from $path, received $status"; exit 1; }
+          done
+          health="$(curl --silent --show-error --fail --max-time 20 "$CANALIS_URL/api/health")"
+          HEALTH="$health" node -e '
+            const body = JSON.parse(process.env.HEALTH);
+            if (body.status !== "ok" || body.checks?.web !== "ok" || body.checks?.durableStorage !== "connected") {
+              throw new Error(`Unhealthy production response: ${JSON.stringify(body)}`);
+            }
+          '

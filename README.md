@@ -71,7 +71,7 @@ The committed devnet proof demonstrates the canonical lifecycle without a replac
 70,000 unused units returned to payer
 ```
 
-See [`docs/JUDGE_DEMO.md`](docs/JUDGE_DEMO.md) for the reproducible walkthrough and [`docs/settlement-finalization.md`](docs/settlement-finalization.md) for the finalization/recovery contract.
+See [`docs/JUDGE_DEMO.md`](docs/JUDGE_DEMO.md) for the reproducible walkthrough, [`docs/WORLDS_FAIR_SUBMISSION.md`](docs/WORLDS_FAIR_SUBMISSION.md) for the submission package, and [`docs/settlement-finalization.md`](docs/settlement-finalization.md) for the finalization/recovery contract.
 
 Canalis never invents transaction signatures. Explorer links are emitted only when genuine transaction evidence is persisted.
 
@@ -115,7 +115,7 @@ Release installs are lockfile-frozen. See [`docs/DEPENDENCY_POLICY.md`](docs/DEP
 
 The canonical product URL is **https://canalis-sigma.vercel.app**. Public metadata, sitemap, health responses, repository homepage, and this README all use that one stable project-level production alias rather than preview/branch deployment URLs.
 
-`GET /api/health` returns the current web release metadata, Vercel commit/environment information when available, and whether durable storage is configured. It does not expose connection strings, credentials, signing material, or provider secrets.
+`GET /api/health` returns the current web release metadata, Vercel commit/environment information when available, and the result of a live durable-storage query. It does not expose connection strings, credentials, signing material, or provider secrets.
 
 Optional deployment configuration:
 
@@ -125,6 +125,8 @@ CANALIS_RELEASE_VERSION=<human-readable release label>
 ```
 
 Vercel uses **Root Directory = `apps/web`**. Durable production operation requires `DATABASE_URL`; saved provider credentials additionally require `CANALIS_PROVIDER_SECRET_KEY`. Private keys and signer/session material stay outside the repository.
+
+See [`docs/OPERATIONS_RUNBOOK.md`](docs/OPERATIONS_RUNBOOK.md) for the release, monitoring, backup/restore, incident-response, and rollback procedures.
 
 ## Security and reliability
 

@@ -53,9 +53,9 @@ const invokedDirectly = process.argv[1]
   : false;
 
 if (invokedDirectly) {
-  const databaseUrl = process.env.DATABASE_URL?.trim();
+  const databaseUrl = process.env.DATABASE_URL_UNPOOLED?.trim() || process.env.DATABASE_URL?.trim();
   if (!databaseUrl) {
-    console.error("DATABASE_URL is required to run Canalis migrations.");
+    console.error("DATABASE_URL_UNPOOLED or DATABASE_URL is required to run Canalis migrations.");
     process.exitCode = 1;
   } else {
     await migrateDatabase(databaseUrl);

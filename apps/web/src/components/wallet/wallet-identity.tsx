@@ -73,6 +73,40 @@ type WalletIdentityContextValue = {
 const WalletIdentityContext = createContext<WalletIdentityContextValue | null>(null);
 const REMEMBERED_WALLET_KEY = "canalis.wallet.standard.name";
 const DEVNET_CHAIN = "solana:devnet";
+const METAMASK_WALLET_NAME = "MetaMask";
+
+let metaMaskWalletPromise: Promise<WalletLike> | null = null;
+
+function initializeMetaMaskWallet() {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("MetaMask Connect can only initialize in a browser."));
+  }
+  if (!metaMaskWalletPromise) {
+    metaMaskWalletPromise = import("@metamask/connect-solana")
+      .then(({ createSolanaClient }) => createSolanaClient({
+        dapp: {
+          name: "Canalis",
+          url: window.location.origin,
+          iconUrl: new URL("/canalis-mark.svg", window.location.origin).toString(),
+        },
+        api: {
+          supportedNetworks: {
+            devnet: "https://api.devnet.solana.com",
+          },
+        },
+        analytics: {
+          enabled: false,
+          integrationType: "canalis-wallet-standard",
+        },
+      }))
+      .then((client) => client.getWallet() as unknown as WalletLike)
+      .catch((caught) => {
+        metaMaskWalletPromise = null;
+        throw caught;
+      });
+  }
+  return metaMaskWalletPromise;
+}
 
 function feature<T>(wallet: WalletLike, name: string): T | undefined {
   return wallet.features[name] as T | undefined;
@@ -108,6 +142,20 @@ function compactAddress(address: string) {
   return `${address.slice(0, 5)}…${address.slice(-4)}`;
 }
 
+function walletErrorMessage(caught: unknown, walletName: string) {
+  const message = caught instanceof Error ? caught.message : "";
+  const code = typeof caught === "object" && caught !== null && "code" in caught
+    ? String((caught as { code?: unknown }).code)
+    : "";
+  if (code === "4001" || /rejected|denied|cancelled|canceled/i.test(message)) {
+    return "Connection was cancelled in your wallet. Approve the request to continue.";
+  }
+  if (walletName === METAMASK_WALLET_NAME && /failed to connect|connection failed|not connected/i.test(message)) {
+    return "MetaMask could not open a Solana session. Unlock MetaMask, enable its Solana account, and try again.";
+  }
+  return message || "Wallet sign-in failed.";
+}
+
 async function responseMessage(response: Response, fallback: string) {
   try {
     const body = (await response.json()) as { error?: { message?: string } };
@@ -125,11 +173,34 @@ export function WalletIdentityProvider({ children }: { children: ReactNode }) {
   const [activeWallet, setActiveWallet] = useState<WalletLike | null>(null);
   const [activeAccount, setActiveAccount] = useState<WalletAccountLike | null>(null);
   const silentAttempted = useRef(false);
+  const metaMaskWallet = useRef<WalletLike | null>(null);
+
+  const refreshDiscoveredWallets = useCallback(() => {
+    const discovered = getWallets().get() as unknown as readonly WalletLike[];
+    const preferredMetaMask = metaMaskWallet.current;
+    const compatible = discovered.filter((wallet) => (
+      supportsCanalisAuth(wallet) &&
+      (wallet.name !== METAMASK_WALLET_NAME || wallet === preferredMetaMask)
+    ));
+    setWallets(preferredMetaMask && supportsCanalisAuth(preferredMetaMask)
+      ? [preferredMetaMask, ...compatible.filter((wallet) => wallet !== preferredMetaMask)]
+      : compatible);
+  }, []);
+
+  const initializeMetaMask = useCallback(async () => {
+    try {
+      metaMaskWallet.current = await initializeMetaMaskWallet();
+      refreshDiscoveredWallets();
+    } catch {
+      setError("MetaMask Solana support could not initialize. Refresh the page, then try again.");
+      refreshDiscoveredWallets();
+    }
+  }, [refreshDiscoveredWallets]);
 
   const refreshWallets = useCallback(() => {
-    const discovered = getWallets().get() as unknown as readonly WalletLike[];
-    setWallets(discovered.filter(supportsCanalisAuth));
-  }, []);
+    refreshDiscoveredWallets();
+    void initializeMetaMask();
+  }, [initializeMetaMask, refreshDiscoveredWallets]);
 
   const clearServerSession = useCallback(async () => {
     await fetch("/api/auth/session", { method: "DELETE", credentials: "same-origin" }).catch(() => undefined);
@@ -139,7 +210,7 @@ export function WalletIdentityProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const registry = getWallets();
     refreshWallets();
-    const refresh = () => refreshWallets();
+    const refresh = () => refreshDiscoveredWallets();
     const offRegister = registry.on("register", refresh);
     const offUnregister = registry.on("unregister", refresh);
 
@@ -166,7 +237,7 @@ export function WalletIdentityProvider({ children }: { children: ReactNode }) {
       offRegister();
       offUnregister();
     };
-  }, [refreshWallets]);
+  }, [refreshDiscoveredWallets, refreshWallets]);
 
   useEffect(() => {
     if (!session || activeWallet || wallets.length === 0 || silentAttempted.current) return;
@@ -275,7 +346,7 @@ export function WalletIdentityProvider({ children }: { children: ReactNode }) {
       setError("");
     } catch (caught) {
       setStatus("error");
-      setError(caught instanceof Error ? caught.message : "Wallet sign-in failed.");
+      setError(walletErrorMessage(caught, wallet.name));
     }
   }, [clearServerSession, session]);
 
@@ -370,7 +441,7 @@ export function WalletAccountControl() {
               {wallets.map((wallet) => (
                 <button type="button" key={wallet.name} onClick={() => void connectWallet(wallet)}>
                   <img src={wallet.icon} alt="" />
-                  <span><strong>{wallet.name}</strong><small>Wallet Standard · signMessage</small></span>
+                  <span><strong>{wallet.name}</strong><small>{wallet.name === METAMASK_WALLET_NAME ? "MetaMask Connect · Solana devnet" : "Wallet Standard · signMessage"}</small></span>
                   <i>→</i>
                 </button>
               ))}
