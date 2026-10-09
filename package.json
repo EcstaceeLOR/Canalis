@@ -22,9 +22,11 @@
     "developer:check": "node scripts/check-developer-platform.mjs",
     "workspace:check": "node scripts/check-team-workspaces.mjs",
     "judge:check": "pnpm test && pnpm typecheck && pnpm ux:check && pnpm public:check && pnpm developer:check && pnpm workspace:check && pnpm security:check",
+    "e2e:judge": "playwright test --project=chromium",
     "dev": "pnpm --filter @canalis/web dev"
   },
   "devDependencies": {
+    "@playwright/test": "^1.51.1",
     "typescript": "^5.7.3",
     "vitest": "^2.1.9"
   }

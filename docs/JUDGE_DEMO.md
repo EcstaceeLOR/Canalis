@@ -47,6 +47,22 @@ A successful `pnpm judge:check` means:
 - TypeScript passes,
 - the committed-file secret scan passes.
 
+The browser-level release gate additionally requires a migrated Postgres database and
+a production build:
+
+```bash
+export DATABASE_URL=postgres://postgres:postgres@localhost:5432/canalis_e2e
+pnpm db:migrate
+pnpm build:web
+pnpm exec playwright install chromium
+pnpm e2e:judge
+```
+
+Set `PLAYWRIGHT_BASE_URL` to run the identical test against a database-backed preview
+deployment. The test creates a one-use Ed25519 identity in memory, signs the normal
+wallet challenge, and exercises the real session, task, policy, persistence, and UI
+paths. Traces and screenshots are retained only when the test fails.
+
 ## Under-three-minute presentation
 
 ### 0:00–0:20 — Problem
@@ -157,6 +173,7 @@ voucher advancement. It is covered by the core route test
 Before recording or presenting:
 
 - [ ] `pnpm judge:check` is green on the exact submission commit.
+- [ ] `pnpm e2e:judge` is green locally and against the staged deployment.
 - [ ] Dashboard loads from a fresh install.
 - [ ] `$1.00 / $0.25 / three providers` produces exactly `$0.20` authorized and `$0.80` recoverable.
 - [ ] At least one policy-rejection path is ready to demonstrate if asked.
