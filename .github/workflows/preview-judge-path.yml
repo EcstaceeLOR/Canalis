@@ -12,6 +12,7 @@ on:
 permissions:
   contents: read
   deployments: read
+  id-token: write
 
 jobs:
   preview-judge-path:
@@ -34,6 +35,20 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
+      - name: Acquire short-lived GitHub OIDC identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --silent --show-error --fail \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL")"
+          token="$(OIDC_RESPONSE="$response" node -e '
+            const body = JSON.parse(process.env.OIDC_RESPONSE);
+            if (typeof body.value !== "string" || !body.value) process.exit(1);
+            process.stdout.write(body.value);
+          ')"
+          echo "::add-mask::$token"
+          printf 'VERCEL_OIDC_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
       - name: Run the judge path against the deployed preview
         run: pnpm e2e:judge
       - name: Upload preview failure evidence
