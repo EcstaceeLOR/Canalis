@@ -36,6 +36,11 @@ Current public devnet evidence:
 
 ## Architecture and payment flow
 
+High-resolution product evidence:
+
+- [Public landing page](assets/worldsfair-landing.png)
+- [Completed task and payment evidence](assets/worldsfair-payment-evidence.png)
+
 ```mermaid
 flowchart LR
   W[Solana wallet owner] -->|offchain ownership signature| C[Canalis control plane]
@@ -79,7 +84,7 @@ flowchart LR
 - [ ] Confirm the team leader and every team member are registered on Colosseum.
 - [ ] Confirm the product URL, repository, and Explorer links open in a private browser.
 - [ ] Confirm `verify`, `judge-path`, and `preview-judge-path` are green on the tagged commit.
-- [ ] Capture fresh 1440px screenshots after the production tag and place them in `docs/assets/`.
+- [x] Capture fresh 1440px screenshots from the production release and place them in `docs/assets/`.
 - [ ] Submit before **11:59 PM Pacific on October 12, 2026**; do not treat a Git tag as a Colosseum submission.
 
 The official judging criteria are functionality/code quality, potential impact, novelty, UX, open-source composability, and business plan. The product and videos should make each criterion observable rather than merely claim it.
