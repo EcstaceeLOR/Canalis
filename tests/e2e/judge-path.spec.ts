@@ -69,10 +69,15 @@ test("three-minute judge path persists, renders, and rejects policy violations",
   await expect(budget).toHaveValue("1.00");
   await expect(cap).toHaveValue("0.25");
 
+  const createResponse = page.waitForResponse((response) =>
+    response.request().method() === "POST" && new URL(response.url()).pathname === "/api/tasks",
+  );
   const executeResponse = page.waitForResponse((response) =>
     response.request().method() === "POST" && /\/api\/tasks\/[^/]+\/execute$/.test(new URL(response.url()).pathname),
   );
   await page.getByRole("button", { name: /Run reference task/ }).click();
+  const creation = await createResponse;
+  expect(creation.status()).toBe(201);
   const execution = await executeResponse;
   expect(execution.ok()).toBeTruthy();
   const result = (await execution.json()) as { task: { id: string } };

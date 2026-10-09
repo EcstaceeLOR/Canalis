@@ -37,7 +37,7 @@ export function DemoTaskRunner() {
     }
     setRunning(true); setError("");
     try {
-      const createResult = await fetch("/api/tasks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ budgetUsd: budget, maxPerCallUsd: cap, allowedProviders: selected, mode: "deterministic" }) });
+      const createResult = await fetch("/api/tasks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Reference research task", description: "Deterministic judge-path task for bounded provider payments.", budgetUsd: budget, maxPerCallUsd: cap, allowedProviders: selected, mode: "deterministic" }) });
       const created = await createResult.json() as DemoResponse | ApiError;
       if (!createResult.ok || "error" in created) throw new Error(apiMessage(created, "Task creation failed."));
 
