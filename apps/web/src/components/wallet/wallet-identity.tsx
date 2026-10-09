@@ -11,6 +11,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { selectCompatibleWallets } from "./wallet-selection";
 
 type WalletAccountLike = {
   address: string;
@@ -112,13 +113,6 @@ function feature<T>(wallet: WalletLike, name: string): T | undefined {
   return wallet.features[name] as T | undefined;
 }
 
-function supportsCanalisAuth(wallet: WalletLike) {
-  return Boolean(
-    feature<ConnectFeature>(wallet, "standard:connect") &&
-      feature<SignMessageFeature>(wallet, "solana:signMessage"),
-  );
-}
-
 function supportsDevnet(wallet: WalletLike, account: WalletAccountLike) {
   const chains = account.chains.length > 0 ? account.chains : wallet.chains;
   return chains.length === 0 || chains.includes(DEVNET_CHAIN);
@@ -177,14 +171,7 @@ export function WalletIdentityProvider({ children }: { children: ReactNode }) {
 
   const refreshDiscoveredWallets = useCallback(() => {
     const discovered = getWallets().get() as unknown as readonly WalletLike[];
-    const preferredMetaMask = metaMaskWallet.current;
-    const compatible = discovered.filter((wallet) => (
-      supportsCanalisAuth(wallet) &&
-      (wallet.name !== METAMASK_WALLET_NAME || wallet === preferredMetaMask)
-    ));
-    setWallets(preferredMetaMask && supportsCanalisAuth(preferredMetaMask)
-      ? [preferredMetaMask, ...compatible.filter((wallet) => wallet !== preferredMetaMask)]
-      : compatible);
+    setWallets(selectCompatibleWallets(discovered, metaMaskWallet.current));
   }, []);
 
   const initializeMetaMask = useCallback(async () => {
@@ -441,7 +428,7 @@ export function WalletAccountControl() {
               {wallets.map((wallet) => (
                 <button type="button" key={wallet.name} onClick={() => void connectWallet(wallet)}>
                   <img src={wallet.icon} alt="" />
-                  <span><strong>{wallet.name}</strong><small>{wallet.name === METAMASK_WALLET_NAME ? "MetaMask Connect · Solana devnet" : "Wallet Standard · signMessage"}</small></span>
+                  <span><strong>{wallet.name}</strong><small>{wallet.name === METAMASK_WALLET_NAME ? "MetaMask · Solana devnet" : "Wallet Standard · signMessage"}</small></span>
                   <i>→</i>
                 </button>
               ))}
