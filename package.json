@@ -23,6 +23,7 @@
     "workspace:check": "node scripts/check-team-workspaces.mjs",
     "judge:check": "pnpm test && pnpm typecheck && pnpm ux:check && pnpm public:check && pnpm developer:check && pnpm workspace:check && pnpm security:check",
     "e2e:judge": "playwright test --project=chromium",
+    "capture:submission": "node scripts/capture-submission-assets.mjs",
     "dev": "pnpm --filter @canalis/web dev"
   },
   "devDependencies": {
