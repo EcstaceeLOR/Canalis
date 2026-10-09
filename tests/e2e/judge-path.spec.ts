@@ -2,6 +2,28 @@ import { generateKeyPairSync, sign } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 
 const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const VERCEL_OIDC_HEADER = "x-vercel-trusted-oidc-idp-token";
+
+function deploymentRequestHeaders() {
+  const token = process.env.VERCEL_OIDC_TOKEN?.trim();
+  return token ? { [VERCEL_OIDC_HEADER]: token } : undefined;
+}
+
+async function authenticateProtectedPreview(page: Page) {
+  const token = process.env.VERCEL_OIDC_TOKEN?.trim();
+  const rawBaseUrl = process.env.PLAYWRIGHT_BASE_URL?.trim();
+  if (!token || !rawBaseUrl) return;
+
+  const origin = new URL(rawBaseUrl).origin;
+  await page.route(`${origin}/**`, async (route) => {
+    await route.continue({
+      headers: {
+        ...route.request().headers(),
+        [VERCEL_OIDC_HEADER]: token,
+      },
+    });
+  });
+}
 
 function encodeBase58(bytes: Uint8Array): string {
   if (bytes.length === 0) return "";
@@ -29,6 +51,7 @@ async function authenticateEphemeralWallet(page: Page): Promise<string> {
 
   const challengeResponse = await page.request.post("/api/auth/challenge", {
     data: { walletAddress },
+    headers: deploymentRequestHeaders(),
   });
   expect(challengeResponse.status()).toBe(201);
   const challenge = (await challengeResponse.json()) as {
@@ -43,13 +66,15 @@ async function authenticateEphemeralWallet(page: Page): Promise<string> {
       walletAddress,
       signatureBase64,
     },
+    headers: deploymentRequestHeaders(),
   });
   expect(sessionResponse.status()).toBe(201);
   return walletAddress;
 }
 
 test("three-minute judge path persists, renders, and rejects policy violations", async ({ page }) => {
-  const healthResponse = await page.request.get("/api/health");
+  await authenticateProtectedPreview(page);
+  const healthResponse = await page.request.get("/api/health", { headers: deploymentRequestHeaders() });
   expect(healthResponse.status()).toBe(200);
   expect(await healthResponse.json()).toMatchObject({
     status: "ok",
@@ -97,13 +122,15 @@ test("three-minute judge path persists, renders, and rejects policy violations",
   await expect(details).toContainText("canalis:");
   await expect(details.getByText("Response hash")).toBeVisible();
 
-  const taskReadResponse = await page.request.get(`/api/tasks/${result.task.id}`);
+  const taskReadResponse = await page.request.get(`/api/tasks/${result.task.id}`, {
+    headers: deploymentRequestHeaders(),
+  });
   expect(taskReadResponse.ok()).toBeTruthy();
   expect(await taskReadResponse.json()).toMatchObject({
     task: { id: result.task.id },
     graph: { budgetAtomic: "1000000", spentAtomic: "200000", remainingAtomic: "800000" },
   });
-  expect((await page.request.get("/api/tasks")).ok()).toBeTruthy();
+  expect((await page.request.get("/api/tasks", { headers: deploymentRequestHeaders() })).ok()).toBeTruthy();
 
   await cap.fill("0.04");
   await page.getByRole("button", { name: /Run reference task/ }).click();

@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL?.trim();
 const baseURL = externalBaseUrl || "http://localhost:3000";
+const hasVercelOidcToken = Boolean(process.env.VERCEL_OIDC_TOKEN?.trim());
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -17,7 +18,9 @@ export default defineConfig({
   use: {
     baseURL,
     screenshot: "only-on-failure",
-    trace: "retain-on-failure",
+    // An authenticated preview trace could retain the short-lived protection
+    // header. Keep trace evidence for ordinary runs, but never for OIDC runs.
+    trace: hasVercelOidcToken ? "off" : "retain-on-failure",
     video: "off",
   },
   projects: [
