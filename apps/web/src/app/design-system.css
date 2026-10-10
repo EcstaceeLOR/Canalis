@@ -87,6 +87,35 @@
   --amber: var(--color-warning);
   --red: var(--color-danger);
   --shadow: var(--shadow-lg);
+
+  /* Legacy product-workspace aliases. Keep inverse text explicit so light
+     primary controls never inherit the surrounding light text color. */
+  --surface: var(--color-surface-1);
+  --wash: var(--color-surface-2);
+  --muted: var(--color-text-secondary);
+  --muted-strong: var(--color-text-primary);
+  --border: var(--color-border-subtle);
+  --brand: var(--color-brand-400);
+  --background: var(--color-bg-canvas);
+  --text: var(--color-text-primary);
+  --surface-base: var(--color-bg-canvas);
+  --surface-subtle: var(--color-bg-subtle);
+  --surface-raised: var(--color-surface-2);
+  --surface-0: var(--color-bg-canvas);
+  --surface-1: var(--color-surface-1);
+  --surface-2: var(--color-surface-2);
+  --surface-3: var(--color-surface-3);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --text-muted: var(--color-text-secondary);
+  --text-accent: var(--color-accent-300);
+  --border-subtle: var(--color-border-subtle);
+  --border-accent: var(--color-accent-400);
+  --accent-primary: var(--color-accent-400);
+  --success: var(--color-success);
+  --warning: var(--color-warning);
+  --danger: var(--color-danger);
 }
 
 body {
